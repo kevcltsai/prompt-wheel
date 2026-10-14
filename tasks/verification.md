@@ -125,6 +125,54 @@ not edited. No other application's shortcuts or Accessibility settings were chan
 The first-stage success criterion remains **not yet confirmed by live GUI
 evidence**. Build/test completion must not be reported as end-to-end acceptance.
 
+## 2026-10-05 prompt library and wheel improvements
+
+- Branch: `feat/prompt-wheel-library-ring`; working tree started clean.
+- `./scripts/test.sh`: passed, 33 behavior checks. Added create, edit, category/title
+  move, delete, collision-safe import, JSON round-trip, path-traversal and symlink
+  escape coverage.
+- `./scripts/build.sh`: passed; local ad-hoc signed app bundle created at
+  `dist/Prompt Wheel.app`. SwiftPM reported the existing CLT missing-framework
+  search-path warnings; compile, link, bundle, and signature verification passed.
+- `git diff --check`: passed.
+- Live UI and cross-app product-path checks remain pending the shared desktop slot.
+  No new claim is made about hover rendering, sheet/dialog behavior, original-app
+  focus, explicit clipboard fallback, physical hotkeys, or paste delivery until
+  those checks are run.
+
+
+## 2026-10-05 transparent radial wheel redesign
+
+- The earlier 540×400 rectangle was replaced in source by a 280×280 transparent,
+  borderless floating radial wheel with no window shadow. The panel expands only
+  after a category selection; prompts and their summary/full-text preview appear
+  alongside it (or below it on narrow displays). Library CRUD and JSON transfer
+  live in a separate resizable Prompt Library window.
+- Category hover uses a 120 ms enlargement and respects Reduce Motion. The wheel
+  and category pills respect Reduce Transparency. Extra categories use a More list
+  with keyboard category selection. No continuous animation was added.
+- Latest local dist app release build passed, its ad-hoc signature verifies, and
+  ./scripts/test.sh passed all 33 core behavior checks.
+- Latest executable SHA-256: ee621294c1dc7b59a10e4d356266e1107ccb6770b86c9308a671f96203508754.
+- An independent read-only code review found and prompted fixes for narrow-screen
+  sizing, More-list Return/navigation, vertical expansion anchoring, keyboard scroll,
+  and screen-reader preview. Final re-review found no remaining Critical/High/Medium
+  issues; GUI runtime behavior remains outside that source review.
+- Runtime GUI verification is still pending. CUA timed out while attaching to the
+  menu-bar-only app; the assigned desktop slot was released to another project.
+  No screenshot of the wheel, TextEdit focus/paste, Escape, or app lifecycle is
+  claimed. No Accessibility or other permissions were changed.
+- Installed the verified build at `/Users/kevintsai/Applications/Prompt Wheel.app`
+  (SHA-256 above); preserved the previous installed build at
+  `/Users/kevintsai/Applications/Prompt Wheel.backup-2026-10-05-before-radial-redesign-v0.1.0-1.app`.
+  The new installed app has not been launched. The dist test instance (PID 16950)
+  remains running and was not terminated; gracefully quit it before launching the
+  installed app to avoid an older in-memory instance intercepting the menu action.
+- A previous installed build reported macOS hotkey status -9878. A read-only
+  process check found no Prompt Wheel instance running at that point, so the owner
+  remains unknown. The new build leaves Option-Space unchanged, removes the blocking
+  startup alert, and retains the explicit Open Prompt Wheel menu fallback.
+
 ## Scope and side effects
 
 - Added only the native utility, seven Markdown samples, build/test scripts,
@@ -137,3 +185,117 @@ evidence**. Build/test completion must not be reported as end-to-end acceptance.
 - V1 hotkey configuration UI is deferred as allowed by the original scope;
   the default remains centralized in `GlobalHotKey.swift`. Clipboard restoration
   defaults off, and folder location is editable from the menu bar.
+
+## 2026-10-05 reported unresponsive click follow-up
+
+- User reported that Prompt Wheel cannot be clicked. Re-ran `./scripts/test.sh`:
+  all 33 existing core checks passed; these do not exercise mouse input or AppKit UI.
+- CUA `getApp()` for both the dist test app and installed app returned
+  `-10005 timeoutReached`. Activity Monitor search for `PromptWheel` showed no
+  rows, while read-only `pgrep` found dist process PID 37801 still alive (10:30
+  elapsed; parent 1). A bounded 10-minute unified-log query returned no matching
+  process messages. At this point no app was terminated and no permission/hotkey
+  setting changed. The reported click failure remains unreproduced; no GUI fix is claimed.
+- Later read-only checks found both dist PID 37801 and installed PID 38350. The
+  installed-path CUA call timed out but nevertheless started PID 38350; this is an
+  observed tool side effect. Neither process was terminated. One sample from each
+  showed its main thread idle in `NSApplication.run` waiting for the next event,
+  with no sampled main-thread lock/wait. This rules out a sampled main-thread stall,
+  but does not verify window hit testing or whether a SwiftUI button action fires.
+  No code fix is claimed without that missing event evidence.
+
+## 2026-10-05 hover-driven submenu update
+
+- Clarified interaction: hovering a category opens its second-level prompt list
+  inside the same wheel panel; the separate library window remains only for CRUD.
+- The prior code changed category hover styling but only opened the submenu on click.
+  Added a shared category route used by the AppKit panel and regression checks,
+  anchored the wheel center across expansion, and added a 180 ms exit delay that
+  keeps the submenu open while the pointer remains inside the expanded panel.
+- Read only active library category names and item counts (no prompt bodies):
+  Debug 1, General 1, GitHub 2, Implementation 2, Review 1. None are empty.
+- Added five synthetic category-to-submenu route checks, five checks that production
+  button centers uniquely fall inside the corresponding capsule hit regions, plus
+  unknown-category preservation and submenu-collapse checks. `./scripts/test.sh`:
+  45 checks passed. These are geometry/component checks, not dispatched AppKit mouse events.
+  `./scripts/build.sh`, ad-hoc signature verification, and `git diff --check` passed.
+- Final dist candidate executable SHA-256: ebdb54c44c033db86b6bf62d28fe0443398010d0f9f69c3487580af9a69e166e.
+  The installed app was not replaced or launched.
+- The user confirmed the supplied attachment shows the five-category wheel
+  (GitHub, Build, Review, Debug, General, with a centered chat icon). I did not
+  read the image pixels locally, so this note relies on the user's identification.
+  The wheel's AppKit panel is borderless, clear, shadowless, and floating in source;
+  its transparent material surfaces are limited to the center and category pills.
+  The supplied Library file could not be materialized locally because its
+  bundled transfer helper requires Python 3.10+, while the machine has Python 3.9.6
+  and no Python 3.10+ at checked standard locations. No raw URL or alternate
+  transfer was used; the Library item was not modified. GUI visual acceptance is
+  pending the parent-assigned Prompt-specific slot.
+
+## 2026-10-05 center drag update
+
+- Added a 5 pt drag gesture to the wheel center circle only. Category capsules and
+  prompt rows retain their separate hover/click paths; drag updates the existing
+  NSPanel frame and wheel anchor without touching prompt data or saved preferences.
+- Screen-space conversion and compact/expanded panel clamping are covered by three
+  new geometry checks. `./scripts/test.sh`: 48 checks passed. Production build,
+  ad-hoc signature verification and `git diff --check` passed.
+- Independent source review found no concrete conflict with prompt selection,
+  category hover, Escape handling or submenu anchoring. GUI gesture/hit-test behavior
+  remains unverified and should be checked before installing this candidate.
+
+## 2026-10-05 installed center-drag candidate (not launched)
+
+- Rechecked the dist candidate hash `368b9fdeb6d45ab480b571477513c732d822078f65c23c0b55a779096eccabd0` and signature before replacement.
+- Installed only the `.app` bundle at `/Users/kevintsai/Applications/Prompt Wheel.app`; post-install executable hash matches and `codesign --verify --deep --strict` passes.
+- Preserved the previous installed ebdb build (`ebdb54c44c033db86b6bf62d28fe0443398010d0f9f69c3487580af9a69e166e`) in `Prompt Wheel.backup-2026-10-05-before-center-drag-original.app` and a verified copy at `Prompt Wheel.backup-2026-10-05-before-center-drag-v0.1.0-1.app`. All older backups remain.
+- Did not launch the app, open GUI, query processes, alter prompt-library data, change preferences, or change permissions. Runtime GUI acceptance remains pending the parent-assigned single desktop slot.
+
+## 2026-10-05 runtime identity diagnostic candidate (not installed or launched)
+
+- Added disabled status-menu rows sourced from `Bundle.main`: app version/build,
+  unique build ID `pw-2026-10-05-mouse-diagnostics-01`, and standardized bundle path.
+  `CFBundleVersion` is now 2; short version remains 0.1.0.
+- Added three Core checks for identity value and path formatting. `./scripts/test.sh`:
+  51 checks passed. `./scripts/build.sh`, ad-hoc signature verification and
+  `git diff --check` passed.
+- Candidate executable SHA-256: `fa2931e6766932f76eed9f04c08164a97f4bc19e22e20eb4fbac06e01a694a62`.
+  The installed app remains the 368 drag build (build 1); this candidate was not
+  installed or launched.
+- Independent source review found no explicit `ignoresMouseEvents`, disabled hit
+  testing, or shared gesture blocker. Hover and drag still rely on event delivery to
+  the same `NSHostingView` in the nonactivating `NSPanel`. Existing tests do not
+  dispatch AppKit mouse events, so hover and drag remain unverified at runtime; no
+  mouse-input code change is claimed from static review.
+
+## 2026-10-06 local event diagnostics candidate (built, not installed or launched)
+
+- The user directly asked in this thread why the shown UI was not transparent and
+  whether it should be a floating wheel. Recorded as a UI scope steer: the wheel
+  panel remains borderless, clear, shadowless and floating; the expanded prompt
+  submenu uses `ultraThinMaterial`, while macOS Reduce Transparency keeps an opaque
+  window-background fallback. This visual adjustment does not count as an input fix.
+- Source-thread reference: `01a0f446-eecb-73d9-ad3e-42288a836010`. Exact user text
+  visible in the delegated conversation: “為什麼不是透明的？” and “而且不是應該是
+  一個浮動的wheel 嗎”. Per-message IDs and timestamps were not included in the
+  accessible transcript, so they are intentionally left unspecified for parent-side
+  independent scope review.
+- Added only in-memory counters for six AppKit mouse event types, window match,
+  AppKit content-view hit-test class and count, plus fixed SwiftUI hover/drag/action
+  marker labels. No prompt text, coordinates, keyboard or clipboard data, files,
+  event monitors, permissions or other-app data are collected. AppKit hit-test
+  results describe geometry before `super.sendEvent`, not guaranteed recipients;
+  SwiftUI markers show whether the relevant closure ran.
+- `PromptPanel` exposes read-only forwarding properties for the AppKit panel's
+  `ignoresMouseEvents`, `acceptsMouseMovedEvents`, and in-memory tally, allowing
+  the status menu to display state without exposing a panel mutation path.
+- `./scripts/test.sh`: 53 checks passed. The project build emitted only existing
+  missing Command Line Tools search-path warnings. `codesign --verify --deep
+  --strict` passed; `git diff --check` passed.
+- Candidate executable SHA-256:
+  `772c8a3636319d80f1538e74abdd81c08e4f323a556147a2905490e647ad670c`.
+  Bundle version 0.1.0 (2); build ID `pw-2026-10-05-mouse-diagnostics-01`.
+- Independent source review found no diagnostics scope or privacy blocker. The
+  existing SwiftPM harness does not produce real window-server pointer events, so
+  hover/drag delivery remains unverified. No GUI, install or launch was performed;
+  the shared desktop is assigned to MindSearch.

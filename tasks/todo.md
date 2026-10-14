@@ -20,3 +20,18 @@
 - [ ] Complete live GUI acceptance: physical hotkey, panel navigation/cancellation,
       focus recovery, exact paste without submission in Codex and ChatGPT,
       permission recovery, full-screen/multiple displays. See verification matrix.
+
+## Prompt library and wheel improvements — 2026-10-05
+
+- [x] Add local Markdown-backed prompt create, edit, move, delete, stable sorting,
+      and JSON import/export that skips name collisions.
+- [x] Replace the permanent rectangle with a transparent floating radial wheel;
+      hovering a category opens its title/summary submenu in the same panel, with
+      a short exit delay and the wheel anchored in place.
+- [x] Move CRUD and JSON transfer into a separate library window; retain one-shot
+      click/Enter paste behavior and expose preview to keyboard/VoiceOver users.
+- [x] Add reduced-motion/transparency handling and screen-bound placement.
+- [x] Run focused library checks and build the app bundle.
+- [ ] Complete live UI checks for ring navigation, editor keyboard input, dialogs,
+      screen edges, hover-to-submenu travel, and original-app paste. GUI remains
+      pending while Coffee uses the shared desktop; no runtime UI result is claimed.

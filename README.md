@@ -27,8 +27,13 @@ open "dist/Prompt Wheel.app"
 2. 從選單列選 **Enable Accessibility…**，在系統設定 → 隱私權與安全性 →
    輔助使用，啟用 **Prompt Wheel**。必要時用 `+` 加入建置出的 `.app`。
 3. 在 Codex、ChatGPT 或其他 App 中點選要輸入文字的欄位。
-4. 按 **⌥ Space**，使用 **↑ / ↓** 選取 prompt，**放開 Enter** 後貼上。
-   滑鼠也可以選取。**Escape** 取消，再按一次快捷鍵也會關閉選單。
+4. 按 **⌥ Space** 開啟透明、置頂的圓形 Prompt Wheel。拖曳中央圓心可移動圓盤；
+   展開中的子選單會跟著移動，圓盤會留在可視螢幕內。游標停在分類上時會略微放大，
+   並在同一視窗展開標題／摘要清單；移入 prompt 預覽全文，點擊 prompt 才會貼上。
+   分類超過圓環可容納的數量時，選 **More +N** 開啟完整分類清單。
+5. 鍵盤使用 **← / →** 切換分類、**↑ / ↓** 選取 prompt，**放開 Enter** 後貼上。
+   **Escape** 取消。選單列的 **Manage Prompt Library…** 會開啟獨立視窗，
+   用來新增、編輯、刪除、匯入與匯出 prompts。
 
 App 只產生一次 Command-V，不產生 Enter，不自動送出。不要在選取時持續
 壓住 Option 等修飾鍵；App 最多等待三秒，逾時會顯示錯誤。
@@ -37,9 +42,10 @@ App 只產生一次 Command-V，不產生 Enter，不自動送出。不要在選
 
 ### ⌥ Space 衝突
 
-ChatGPT macOS 預設也使用 ⌥ Space。請先在衝突 App 的設定中改掉其綁定，
-再從 Prompt Wheel 選單列選 **Retry Global Hotkey**。Prompt Wheel 會顯示
-註冊失敗的錯誤碼，不會自動修改其他 App，也不會偷偷換成別的快捷鍵。
+ChatGPT macOS 預設也使用 ⌥ Space。若註冊失敗，選單列會顯示錯誤碼；
+請先在衝突 App 的設定中改掉其綁定，再選 **Retry Global Hotkey**。
+衝突時仍可用 **Open Prompt Wheel** 開啟圓環。Prompt Wheel 不會自動修改
+其他 App，也不會偷偷換成別的快捷鍵。
 其他事件監聽型快捷鍵工具可能不會造成 Carbon 註冊錯誤，仍需實際確認
 按鍵沒有同時觸發它們。V1 快捷鍵固定，尚未提供自訂 shortcut recorder。
 
@@ -65,8 +71,17 @@ ChatGPT macOS 預設也使用 ⌥ Space。請先在衝突 App 的設定中改掉
 可自行新增分類。隱藏檔案、非 `.md` 檔案與更深層巢狀資料夾不載入。
 每次開啟 panel 重新掃描，選取時重新讀檔；不需要重啟 app。
 
+從選單列 **Manage Prompt Library…** 開啟獨立管理視窗，可新增、編輯、
+重新分類與刪除 prompt。分類、標題和內文會直接儲存到目前的 Markdown
+library；同名項目不會被覆寫。**匯入 JSON…** 和 **匯出 JSON…** 可備份或移轉
+library；匯入時略過同名項目。匯入格式是
+Prompt Wheel 匯出的 JSON 陣列，每筆含 `category`、`title`、`body`。
+
+選取項目後也可按 **複製** 作為手動 fallback。它只會複製到剪貼簿，不會自動
+貼上；按 Escape 關閉選單，再於目標輸入框按 ⌘V。成功或失敗都會明確顯示狀態。
+
 選單列提供 **Open Prompt Folder…**、**Choose Prompt Folder…**，路徑會保存。
-G/I/R/D 的分類快捷鍵尚未啟用，V1 不包含 chord system。
+G/I/R/D 的分類快捷鍵尚未啟用，仍使用方向鍵切換分類。
 
 ## Clipboard
 
