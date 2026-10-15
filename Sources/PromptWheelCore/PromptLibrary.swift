@@ -3,6 +3,7 @@ import Foundation
 public struct Prompt: Identifiable, Equatable, Sendable {
     public let url: URL
     public var id: URL { url }
+    public init(url: URL) { self.url = url }
     public var name: String { url.deletingPathExtension().lastPathComponent }
     public var category: String { url.deletingLastPathComponent().lastPathComponent }
 }

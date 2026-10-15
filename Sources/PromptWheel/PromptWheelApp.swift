@@ -64,6 +64,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         shortcut.isEnabled = false
         menu.addItem(shortcut)
         add("Retry Global Hotkey", action: #selector(registerHotkey), to: menu)
+        if panel.hasSavedPosition {
+            add("Reset Picker Position（回到游標旁開啟）", action: #selector(resetPickerPosition), to: menu)
+        }
         menu.addItem(.separator())
         add("Open Prompt Folder…", action: #selector(openFolder), to: menu)
         add("Choose Prompt Folder…", action: #selector(chooseFolder), to: menu)
@@ -73,26 +76,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         add(PasteController.hasPermission ? "Accessibility: Granted…" : "Enable Accessibility…",
             action: #selector(openPermissions), to: menu)
         menu.addItem(.separator())
-        let diagnosticsItem = NSMenuItem(title: "Local Panel Mouse Diagnostics", action: nil, keyEquivalent: "")
-        let diagnosticsMenu = NSMenu()
-        let diagnosticState = [
-            "ignoresMouseEvents: \(panel.ignoresMouseEvents)",
-            "acceptsMouseMovedEvents: \(panel.acceptsMouseMovedEvents)"
-        ]
-        for title in diagnosticState + panel.inputEventTally.entries.map({ entry in
-            "\(entry.key.stage) \(entry.key.eventType) · view=\(entry.key.view) · windowMatch=\(entry.key.windowMatches) · count=\(entry.count)"
-        }) {
-            let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            diagnosticsMenu.addItem(item)
-        }
-        if panel.inputEventTally.entries.isEmpty {
-            let item = NSMenuItem(title: "No panel events recorded", action: nil, keyEquivalent: "")
-            item.isEnabled = false
-            diagnosticsMenu.addItem(item)
-        }
-        diagnosticsItem.submenu = diagnosticsMenu
-        menu.addItem(diagnosticsItem)
         let identity = PromptWheelBuildIdentity.current()
         for title in [identity.versionLine, identity.buildIDLine, identity.bundlePathLine] {
             let item = NSMenuItem(title: title, action: nil, keyEquivalent: "")
@@ -127,10 +110,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         targetApplication = foreground?.processIdentifier == ProcessInfo.processInfo.processIdentifier ? nil : foreground
         do {
             let categories = try PromptLibrary.load(at: settings.promptFolder)
-            panel.show(categories: categories, targetName: targetApplication?.localizedName ?? "請先選取其他 App 的輸入框",
-                       message: targetApplication == nil ? "請回到要貼上的 App，點選輸入框，再按 ⌥ Space。" : nil)
+            panel.show(categories: categories, targetName: targetApplication?.localizedName ?? "原 App",
+                       hasTarget: targetApplication != nil)
         } catch {
             panel.show(categories: [], targetName: targetApplication?.localizedName ?? "原 App",
+                hasTarget: targetApplication != nil,
                 message: "無法讀取 \(settings.promptFolder.path)：\(error.localizedDescription)")
         }
     }
@@ -147,8 +131,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 },
                 delete: { [weak self] in self?.delete($0) },
                 importPrompts: { [weak self] in self?.importPrompts() },
-                exportPrompts: { [weak self] in self?.exportPrompts() },
-                preview: { try? PromptLibrary.read($0) }
+                exportPrompts: { [weak self] in self?.exportPrompts() }
             )
         }
         libraryWindow?.show()
@@ -178,10 +161,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         panel.model.message = nil
         panel.model.isWorking = true
+        panel.model.selectedID = prompt.id
+        panel.model.pastingID = prompt.id
         pasteTask = Task { [weak self] in
             guard let self else { return }
             defer {
                 panel.model.isWorking = false
+                panel.model.pastingID = nil
                 pasteTask = nil
             }
             do {
@@ -319,6 +305,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             } catch { showAlert("無法讀取資料夾", detail: error.localizedDescription) }
         }
     }
+
+    @objc private func resetPickerPosition() { panel.resetPosition() }
 
     @objc private func toggleRestore() { settings.restoreClipboard.toggle() }
 

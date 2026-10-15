@@ -16,6 +16,8 @@ if [ -d "$app/Contents/Resources/Prompts" ]; then
     rm -r "$app/Contents/Resources/Prompts"
 fi
 cp -R Prompts "$app/Contents/Resources/Prompts"
+rm -rf "$app/Contents/Resources/Fonts"
+cp -R App/Fonts "$app/Contents/Resources/Fonts"
 codesign --force --sign "${PROMPT_WHEEL_SIGNING_IDENTITY:--}" "$app"
 codesign --verify --strict "$app"
 printf 'Built: %s\n' "$app"

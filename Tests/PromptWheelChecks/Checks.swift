@@ -47,19 +47,6 @@ struct Checks {
                   "Markdown files only, case-insensitive extension, deterministic ordering")
         try check(categories[1].prompts.isEmpty, "empty category preserved")
 
-        var panelInputTally = PanelInputEventTally()
-        panelInputTally.record(eventType: "mouseEntered", stage: "AppKit hitTest", view: "NSHostingView", windowMatches: true)
-        panelInputTally.record(eventType: "mouseEntered", stage: "AppKit hitTest", view: "NSHostingView", windowMatches: true)
-        panelInputTally.record(eventType: "leftMouseDown", stage: "AppKit hitTest", view: "nil", windowMatches: false)
-        panelInputTally.record(eventType: "swiftui.centerDrag.changed", stage: "SwiftUI", view: "WheelCenter", windowMatches: true)
-        try check(panelInputTally.entries.first(where: { $0.key.eventType == "mouseEntered" })?.count == 2,
-                  "local input diagnostics distinguish AppKit hit-test and SwiftUI stages")
-        try check(panelInputTally.entries.contains(where: {
-            $0.key.eventType == "leftMouseDown" && $0.key.view == "nil" && !$0.key.windowMatches
-        }) && panelInputTally.entries.contains(where: {
-            $0.key.eventType == "swiftui.centerDrag.changed" && $0.key.stage == "SwiftUI"
-        }), "local input diagnostics preserve observation stage and window match")
-
         let buildIdentity = PromptWheelBuildIdentity(
             infoDictionary: ["CFBundleShortVersionString": "0.1.0",
                              "CFBundleVersion": "2",
@@ -72,53 +59,68 @@ struct Checks {
         try check(buildIdentity.bundlePathLine == "Bundle: /Applications/Prompt Wheel.app",
                   "build identity exposes the standardized bundle path")
 
-        let translatedWheelOrigin = WheelPanelGeometry.translatedOrigin(
-            from: CGPoint(x: 120, y: 180), by: CGSize(width: 45, height: 30))
-        try check(translatedWheelOrigin == CGPoint(x: 165, y: 150),
-                  "wheel drag translates right and down in screen coordinates")
-        let compactWheelOrigin = WheelPanelGeometry.clampedOrigin(
-            proposed: CGPoint(x: 1300, y: -40), panelSize: CGSize(width: 280, height: 280),
+        let dragOrigin = WheelPanelGeometry.clampedOrigin(
+            proposed: CGPoint(x: 1300, y: -40), panelSize: SectionIndex.panelSize,
             visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900))
-        try check(compactWheelOrigin == CGPoint(x: 1150, y: 10),
-                  "drag keeps compact wheel inside the visible screen margin")
-        let expandedWheelOrigin = WheelPanelGeometry.clampedOrigin(
-            proposed: CGPoint(x: 1300, y: 800), panelSize: CGSize(width: 730, height: 384),
-            visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900))
-        try check(expandedWheelOrigin == CGPoint(x: 700, y: 506),
-                  "drag keeps expanded wheel and submenu inside the visible screen margin")
+        try check(dragOrigin == CGPoint(x: 730, y: 10), "dragging keeps the whole picker inside the visible screen")
 
-        let wheelLibrary = root.appendingPathComponent("WheelRouteLibrary")
-        for categoryName in PromptLibrary.categoryOrder {
-            let folder = wheelLibrary.appendingPathComponent(categoryName, isDirectory: true)
-            try files.createDirectory(at: folder, withIntermediateDirectories: true)
-            try "fixture body".write(to: folder.appendingPathComponent("\(categoryName) Prompt.md"),
-                                     atomically: true, encoding: .utf8)
+        let pointer = CGPoint(x: 400, y: 600)
+        let placed = SectionIndex.origin(pointer: pointer, visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900))
+        let firstTab = CGPoint(x: placed.x + SectionIndex.railWidth / 2,
+                               y: placed.y + SectionIndex.panelSize.height - SectionIndex.railInset - SectionIndex.minTabHeight / 2)
+        try check(firstTab == pointer, "picker opens with the first section tab under the pointer")
+        let edgePlaced = SectionIndex.origin(pointer: CGPoint(x: 1435, y: 5),
+                                             visibleFrame: CGRect(x: 0, y: 0, width: 1440, height: 900))
+        try check(edgePlaced == CGPoint(x: 730, y: 10), "picker near a screen corner stays fully visible")
+
+        let mainScreen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let sideScreen = CGRect(x: 1440, y: 0, width: 1920, height: 1080)
+        try check(SectionIndex.restoredOrigin(saved: nil, pointer: pointer, visibleFrames: [mainScreen]) == nil,
+                  "without a saved position the picker opens at the pointer")
+        try check(SectionIndex.restoredOrigin(saved: CGPoint(x: 600, y: 300), pointer: pointer,
+                                              visibleFrames: [mainScreen, sideScreen]) == CGPoint(x: 600, y: 300),
+                  "a moved picker reopens where the user left it")
+        try check(SectionIndex.restoredOrigin(saved: CGPoint(x: 1000, y: 600), pointer: pointer,
+                                              visibleFrames: [mainScreen]) == CGPoint(x: 730, y: 450),
+                  "a saved position partly off screen is pulled fully into view")
+        try check(SectionIndex.restoredOrigin(saved: CGPoint(x: 2000, y: 200), pointer: pointer,
+                                              visibleFrames: [mainScreen, sideScreen]) == nil,
+                  "a position saved on another display is ignored on this one")
+
+        try check(SectionIndex.tabHeight(categoryCount: 5) == SectionIndex.maxTabHeight &&
+                  !SectionIndex.railScrolls(categoryCount: 5), "five sections use full-height tabs without scrolling")
+        try check(SectionIndex.tabHeight(categoryCount: 12) * 12 + SectionIndex.tabGap * 11
+                  <= SectionIndex.panelSize.height - SectionIndex.railInset * 2 &&
+                  !SectionIndex.railScrolls(categoryCount: 12), "twelve sections still fit the rail")
+        try check(SectionIndex.railScrolls(categoryCount: 13) &&
+                  SectionIndex.tabHeight(categoryCount: 13) == SectionIndex.minTabHeight,
+                  "beyond twelve sections the rail scrolls at the minimum tab height")
+        try check((0..<16).map(SectionIndex.hueIndex(forCategoryAt:)) ==
+                  [0, 1, 2, 3, 4, 5, 6, 0, 1, 2, 3, 4, 5, 6, 0, 1],
+                  "section hues cycle through the seven board colours")
+
+        func entry(_ category: String, _ title: String, _ body: String) -> PromptSearch.Entry {
+            PromptSearch.Entry(prompt: Prompt(url: URL(fileURLWithPath: "/lib/\(category)/\(title).md")), text: body)
         }
-        let wheelCategories = try PromptLibrary.load(at: wheelLibrary)
-        var wheelNavigation = WheelCategoryNavigation()
-        let wheelSlots = WheelCategoryLayout.slots(size: 280, categoryCount: wheelCategories.count)
-        for categoryName in PromptLibrary.categoryOrder {
-            let category = wheelNavigation.open(categoryName: categoryName, in: wheelCategories)
-            try check(category?.name == categoryName &&
-                      category?.prompts.map(\.name) == ["\(categoryName) Prompt"] &&
-                      wheelNavigation.activeCategoryName == categoryName &&
-                      wheelNavigation.submenuPresented,
-                      "wheel hover opens the matching \(categoryName) submenu")
-        }
-        for (index, category) in wheelCategories.enumerated() {
-            let slot = wheelSlots.first { $0.index == index && !$0.isMore }
-            let hitSlots = wheelSlots.filter { $0.containsCapsuleHitPoint(slot?.center ?? .zero) }
-            let targetName = hitSlots.first.flatMap { wheelCategories.indices.contains($0.index)
-                ? wheelCategories[$0.index].name : nil }
-            try check(slot != nil && hitSlots.count == 1 && targetName == category.name,
-                      "production button center uniquely falls inside \(category.name)'s capsule hit region")
-        }
-        let priorCategory = wheelNavigation.activeCategoryName
-        try check(wheelNavigation.open(categoryName: "Missing", in: wheelCategories) == nil &&
-                  wheelNavigation.activeCategoryName == priorCategory && wheelNavigation.submenuPresented,
-                  "unknown wheel category leaves the current submenu intact")
-        wheelNavigation.collapseSubmenu()
-        try check(!wheelNavigation.submenuPresented, "leaving the wheel collapses its submenu")
+        let searchLibrary = [
+            entry("Review", "Code Review", "請 review 目前變更"),
+            entry("Debug", "Root Cause", "請先重現問題並蒐集證據，找出 root cause"),
+            entry("GitHub", "Repo Sync", "核對 remote 與 branch"),
+            entry("Review", "Review Notes", "整理 reviewer 意見")
+        ]
+        try check(PromptSearch.results(for: "", in: searchLibrary).isEmpty &&
+                  PromptSearch.results(for: "   ", in: searchLibrary).isEmpty, "empty search shows no results")
+        try check(PromptSearch.results(for: "review", in: searchLibrary).map(\.name) ==
+                  ["Review Notes", "Code Review"], "title prefix ranks before title substring")
+        try check(PromptSearch.results(for: "ROOT", in: searchLibrary).map(\.name) == ["Root Cause"],
+                  "search ignores case")
+        try check(PromptSearch.results(for: "蒐集證據", in: searchLibrary).map(\.name) == ["Root Cause"],
+                  "Chinese text in the prompt body matches")
+        try check(PromptSearch.results(for: "ｒｅｐｏ", in: searchLibrary).map(\.name) == ["Repo Sync"],
+                  "full-width letters match their ASCII titles")
+        try check(PromptSearch.results(for: "github branch", in: searchLibrary).map(\.name) == ["Repo Sync"] &&
+                  PromptSearch.results(for: "github review", in: searchLibrary).isEmpty,
+                  "every search term must match somewhere")
 
         let prompt = categories[0].prompts[0]
         try check(PromptLibrary.read(prompt) == original, "exact Unicode, CRLF, code fences and trailing newlines")

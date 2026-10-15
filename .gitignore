@@ -2,3 +2,11 @@
 dist/
 .DS_Store
 .swiftpm/
+# Impeccable working files: keep the design record (design.json, surfaces/),
+# drop local review captures, decision mocks and third-party reference images.
+.impeccable/ref/
+.impeccable/review/
+.impeccable/mocks/
+.impeccable/questions/
+.impeccable/brief-body.md
+.impeccable/.DS_Store

@@ -1,0 +1,474 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-14T19:36:16+00:00",
+  "title": "Design System: Prompt Wheel",
+  "extensions": {
+    "colorMeta": {
+      "oxide-orange": {
+        "role": "primary",
+        "displayName": "Oxide Orange",
+        "canonical": "#E26A2C",
+        "oklch": "oklch(66.0% 0.166 44.7)",
+        "tonalRamp": [
+          "#190500",
+          "#3F1602",
+          "#6F2A02",
+          "#A0430B",
+          "#D35F21",
+          "#FB864F",
+          "#FCBDA2",
+          "#FEEAE1"
+        ],
+        "note": "Section hue 1; near-black ink."
+      },
+      "chrome-yellow": {
+        "role": "primary",
+        "displayName": "Chrome Yellow",
+        "canonical": "#F2C230",
+        "oklch": "oklch(83.4% 0.158 89.0)",
+        "tonalRamp": [
+          "#100A00",
+          "#2E2200",
+          "#534003",
+          "#7A5F0A",
+          "#A2821F",
+          "#D1A40B",
+          "#F7C73B",
+          "#FEEDC2"
+        ],
+        "note": "Section hue 2; near-black ink."
+      },
+      "grass": {
+        "role": "primary",
+        "displayName": "Grass",
+        "canonical": "#5BA845",
+        "oklch": "oklch(66.0% 0.155 139.2)",
+        "tonalRamp": [
+          "#020F00",
+          "#0C2C02",
+          "#185002",
+          "#31751B",
+          "#519B3B",
+          "#77C163",
+          "#9EE48B",
+          "#CFFEC3"
+        ],
+        "note": "Section hue 3; brightened for near-black ink."
+      },
+      "teal": {
+        "role": "primary",
+        "displayName": "Teal",
+        "canonical": "#13A6A3",
+        "oklch": "oklch(65.7% 0.110 192.5)",
+        "tonalRamp": [
+          "#000E0E",
+          "#022A29",
+          "#0C4C4B",
+          "#077270",
+          "#229996",
+          "#4AC0BC",
+          "#7AE2DF",
+          "#B7FEFB"
+        ],
+        "note": "Section hue 4; brightened for near-black ink."
+      },
+      "ultramarine": {
+        "role": "primary",
+        "displayName": "Ultramarine",
+        "canonical": "#2F4FB5",
+        "oklch": "oklch(46.6% 0.166 266.6)",
+        "tonalRamp": [
+          "#010133",
+          "#071269",
+          "#1C3694",
+          "#395ABF",
+          "#5C80E0",
+          "#86A8FC",
+          "#B8CDFD",
+          "#E8EFFE"
+        ],
+        "note": "Section hue 5; white ink."
+      },
+      "violet": {
+        "role": "primary",
+        "displayName": "Violet",
+        "canonical": "#7650B0",
+        "oklch": "oklch(51.8% 0.148 299.5)",
+        "tonalRamp": [
+          "#110126",
+          "#2F0856",
+          "#4E2B7F",
+          "#714BA9",
+          "#9371CD",
+          "#B798F0",
+          "#D5C2FE",
+          "#F1EBFE"
+        ],
+        "note": "Section hue 6; white ink."
+      },
+      "sienna": {
+        "role": "primary",
+        "displayName": "Sienna",
+        "canonical": "#9A4E2C",
+        "oklch": "oklch(51.1% 0.112 43.6)",
+        "tonalRamp": [
+          "#1A0400",
+          "#401501",
+          "#6D2B09",
+          "#964B29",
+          "#BA7050",
+          "#DF9779",
+          "#FDBDA3",
+          "#FEE9E1"
+        ],
+        "note": "Section hue 7; white ink."
+      },
+      "vermilion": {
+        "role": "tertiary",
+        "displayName": "Errata Vermilion",
+        "canonical": "#D9381E",
+        "oklch": "oklch(58.5% 0.201 31.9)",
+        "tonalRamp": [
+          "#1E0100",
+          "#490600",
+          "#7B1606",
+          "#B12913",
+          "#E4482E",
+          "#FD826B",
+          "#FEBBAD",
+          "#FFE9E4"
+        ],
+        "note": "Errata slip only."
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "Manual Ink",
+        "canonical": "#151515",
+        "oklch": "oklch(19.6% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Text and rules."
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "Soft Ink",
+        "canonical": "#4A463F",
+        "oklch": "oklch(39.6% 0.013 81.8)",
+        "tonalRamp": [
+          "#0D0B06",
+          "#27241E",
+          "#46423B",
+          "#67635C",
+          "#89867F",
+          "#AEAAA4",
+          "#D1CDC7",
+          "#F1EEE8"
+        ],
+        "note": "Meta, excerpts, empty board."
+      },
+      "acetate": {
+        "role": "neutral",
+        "displayName": "Milk Acetate",
+        "canonical": "#F4F2EC",
+        "oklch": "oklch(96.1% 0.008 91.5)",
+        "tonalRamp": [
+          "#0C0B09",
+          "#252421",
+          "#43423F",
+          "#64635F",
+          "#878682",
+          "#ACABA6",
+          "#CFCEC8",
+          "#F0EEE8"
+        ],
+        "note": "The leaf and fields."
+      },
+      "cover": {
+        "role": "neutral",
+        "displayName": "Manual Cover",
+        "canonical": "#E6E2D9",
+        "oklch": "oklch(91.3% 0.013 86.8)",
+        "tonalRamp": [
+          "#0C0B08",
+          "#262420",
+          "#44423D",
+          "#66635D",
+          "#89867F",
+          "#AEAAA3",
+          "#D1CDC5",
+          "#F2EEE5"
+        ],
+        "note": "Library window and sheet."
+      },
+      "white-ink": {
+        "role": "neutral",
+        "displayName": "White Ink",
+        "canonical": "#FFFFFF",
+        "oklch": "oklch(100.0% 0.000 89.9)",
+        "tonalRamp": [
+          "#0B0B0B",
+          "#242424",
+          "#424242",
+          "#636363",
+          "#868686",
+          "#ABABAB",
+          "#CECECE",
+          "#EEEEEE"
+        ],
+        "note": "Ink on dark boards and errata."
+      },
+      "paper-rule": {
+        "role": "neutral",
+        "displayName": "Paper Rule",
+        "canonical": "rgba(21, 21, 21, 0.12)",
+        "tonalRamp": [],
+        "note": "Ink at 12%: row separators and column dividers."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Open section name on the leaf (30pt picker, 34pt library)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Detail title 25pt, editor sheet title 27pt, empty-state titles 21-23pt."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Prompt names in rows, one line."
+      },
+      "tab": {
+        "displayName": "Tab",
+        "purpose": "Divider-tab labels; Bold when active, 15pt when tabs are under 36pt tall."
+      },
+      "button": {
+        "displayName": "Button",
+        "purpose": "Outline and filled buttons; filled ink button is Bold 17pt."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Two-line prompt excerpts (Songti TC set 1pt above nominal 12.5)."
+      },
+      "body-reading": {
+        "displayName": "Body Reading",
+        "purpose": "Full prompt text in library detail and editor; measure capped at 560pt."
+      },
+      "label": {
+        "displayName": "Label (mono)",
+        "purpose": "Counts, keycaps, meta line, file names, field labels, ERRATA stamp (9.5-11pt)."
+      }
+    },
+    "shadows": [
+      {
+        "name": "board-lift",
+        "value": "0 6px 20px rgba(0,0,0,0.24), 0 1px 3px rgba(0,0,0,0.18)",
+        "purpose": "Section board in the picker. (Library window board uses 0 4px 20px rgba(0,0,0,0.14).)"
+      },
+      {
+        "name": "leaf-contact",
+        "value": "0 1.5px 6px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.9)",
+        "purpose": "Acetate leaf resting on its board, top edge lit."
+      },
+      {
+        "name": "tab-edge",
+        "value": "1px 1px 3px rgba(0,0,0,0.16)",
+        "purpose": "Inactive divider tabs only."
+      },
+      {
+        "name": "punched-rim",
+        "value": "inset 0 1.4px 0 rgba(0,0,0,0.42), inset 0 -0.8px 0 rgba(255,255,255,0.55)",
+        "purpose": "Punched holes: shaded upper rim, lit lower lip."
+      }
+    ],
+    "motion": [
+      {
+        "name": "step",
+        "value": "none (0ms, no easing)",
+        "purpose": "All section, selection and hover changes swap instantly; animation is disabled on picker and library."
+      },
+      {
+        "name": "tab-hover-shift",
+        "value": "translateX(3px) brightness(1.05), instant",
+        "purpose": "Hover on an inactive tab; visual only, never opens the section."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "picker-fixed",
+        "value": "700x440pt"
+      },
+      {
+        "name": "library-min",
+        "value": "760x460pt"
+      },
+      {
+        "name": "editor-sheet",
+        "value": "560x420pt"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Divider Tab",
+      "kind": "nav",
+      "refersTo": "section-tab",
+      "description": "Category tab; length encodes prompt count, active tab joins its board. Opens on click only.",
+      "html": "<div class=\"ds-rail\"><button class=\"ds-tab ds-tab-active\"><span class=\"ds-tab-n\">1</span><span class=\"ds-tab-name\">GitHub</span><span class=\"ds-tab-c\">2</span></button><button class=\"ds-tab\" style=\"width:160px;background:#F2C230\"><span class=\"ds-tab-n\">2</span><span class=\"ds-tab-name\">Implementation</span><span class=\"ds-tab-c\">2</span></button><button class=\"ds-tab\" style=\"width:137px;background:#2F4FB5;color:#FFFFFF\"><span class=\"ds-tab-n\">5</span><span class=\"ds-tab-name\">General</span><span class=\"ds-tab-c\">1</span></button></div>",
+      "css": ".ds-rail { display: flex; flex-direction: column; gap: 4px; padding: 16px 0; background: #E6E2D9; } .ds-tab { display: flex; align-items: center; gap: 6px; height: 46px; width: 160px; padding: 0 9px 0 10px; border: 0; background: #E26A2C; color: #151515; border-radius: 2px 7px 7px 2px; box-shadow: 1px 1px 3px rgba(0,0,0,0.16); font-family: 'Barlow Condensed', 'Univers Condensed', sans-serif; font-size: 17px; font-weight: 600; text-align: left; cursor: pointer; } .ds-tab-n, .ds-tab-c { font-family: 'SF Mono', ui-monospace, monospace; font-size: 10px; font-weight: 500; } .ds-tab-n { width: 9px; } .ds-tab-name { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ds-tab:hover { filter: brightness(1.05); transform: translateX(3px); } .ds-tab:focus-visible { outline: 2px solid #151515; outline-offset: 1px; } .ds-tab-active { width: 178px; border-radius: 2px 0 0 2px; box-shadow: none; font-weight: 700; } .ds-tab-active:hover { filter: none; transform: none; }"
+    },
+    {
+      "name": "Section Board with Acetate Leaf",
+      "kind": "card",
+      "refersTo": "acetate-leaf",
+      "description": "Full-hue board carrying the opaque milk-acetate leaf with two punched holes.",
+      "html": "<div class=\"ds-board\"><div class=\"ds-leaf\"><i class=\"ds-hole ds-hole-top\"></i><i class=\"ds-hole ds-hole-bottom\"></i><h2 class=\"ds-leaf-title\">GitHub</h2><p class=\"ds-leaf-meta\">2 PROMPTS · 貼到 Codex · 不送出</p><hr class=\"ds-leaf-rule\"></div></div>",
+      "css": ".ds-board { background: #E26A2C; border-radius: 6px; padding: 14px; box-shadow: 0 6px 20px rgba(0,0,0,0.24), 0 1px 3px rgba(0,0,0,0.18); } .ds-leaf { position: relative; min-height: 220px; background: #F4F2EC; color: #151515; border-radius: 3px; padding: 16px 18px 16px 32px; box-shadow: 0 1.5px 6px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.9); } .ds-hole { position: absolute; left: 10px; width: 12px; height: 12px; border-radius: 50%; background: #E26A2C; box-shadow: inset 0 1.4px 0 rgba(0,0,0,0.42), inset 0 -0.8px 0 rgba(255,255,255,0.55); } .ds-hole-top { top: 34px; } .ds-hole-bottom { bottom: 34px; } .ds-leaf-title { margin: 0; font-family: 'Barlow Condensed', 'Univers Condensed', sans-serif; font-size: 30px; font-weight: 700; line-height: 1; } .ds-leaf-meta { margin: 4px 0 0; font-family: 'SF Mono', ui-monospace, monospace; font-size: 10.5px; color: #4A463F; } .ds-leaf-rule { border: 0; height: 1.5px; background: rgba(21,21,21,0.85); margin: 10px 0 0; }"
+    },
+    {
+      "name": "Prompt Row",
+      "kind": "custom",
+      "refersTo": "prompt-row",
+      "description": "Prompt title over a two-line serif excerpt; selected row is punched through to its board.",
+      "html": "<div class=\"ds-rows\"><button class=\"ds-row ds-row-selected\"><i class=\"ds-row-hole\"></i><span class=\"ds-row-text\"><span class=\"ds-row-head\"><b class=\"ds-row-title\">Repo Sync</b><span class=\"ds-row-hint\">↩ 貼上</span></span><span class=\"ds-row-excerpt\">請先核對目前 workspace、Git root、remote、branch、commit 與未提交修改，再檢查遠端差異。</span></span></button><button class=\"ds-row\"><i class=\"ds-row-hole ds-row-hole-empty\"></i><span class=\"ds-row-text\"><span class=\"ds-row-head\"><b class=\"ds-row-title\">Spec Cleanup</b><span class=\"ds-row-hint\">點一下貼上</span></span><span class=\"ds-row-excerpt\">請比對目前規格、實作與驗證紀錄，找出過時、重複或互相矛盾的內容。</span></span></button></div>",
+      "css": ".ds-rows { background: #F4F2EC; padding: 6px 0; width: 420px; } .ds-row { display: flex; gap: 11px; align-items: flex-start; width: 100%; padding: 9px 8px; border: 0; border-bottom: 0.5px solid rgba(21,21,21,0.12); border-radius: 3px; background: transparent; color: #151515; text-align: left; cursor: pointer; } .ds-row:hover { background: rgba(21,21,21,0.05); } .ds-row:focus-visible { outline: 2px solid #151515; outline-offset: -2px; } .ds-row-selected, .ds-row-selected:hover { background: rgba(226,106,44,0.16); } .ds-row-hole { flex: none; width: 10px; height: 10px; margin-top: 5px; border-radius: 50%; background: #E26A2C; box-shadow: inset 0 1.4px 0 rgba(0,0,0,0.42), inset 0 -0.8px 0 rgba(255,255,255,0.55); } .ds-row-hole-empty { background: transparent; box-shadow: none; } .ds-row-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; } .ds-row-head { display: flex; justify-content: space-between; align-items: baseline; } .ds-row-title { font-family: 'Barlow Condensed', 'Univers Condensed', sans-serif; font-size: 18px; font-weight: 700; } .ds-row-hint { font-family: 'SF Mono', ui-monospace, monospace; font-size: 10px; font-weight: 600; color: #4A463F; visibility: hidden; } .ds-row:hover .ds-row-hint, .ds-row-selected .ds-row-hint { visibility: visible; } .ds-row-excerpt { font-family: 'Songti TC', serif; font-size: 13.5px; line-height: 1.45; color: #4A463F; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }"
+    },
+    {
+      "name": "Filled Ink Button",
+      "kind": "button",
+      "refersTo": "button-ink",
+      "description": "The one primary action on a surface.",
+      "html": "<button class=\"ds-btn-ink\">＋ 新增 Prompt</button>",
+      "css": ".ds-btn-ink { background: #151515; color: #F4F2EC; border: 0; border-radius: 3px; padding: 6px 12px; font-family: 'Barlow Condensed', 'Univers Condensed', sans-serif; font-size: 17px; font-weight: 700; cursor: pointer; } .ds-btn-ink:focus-visible { outline: 2px solid #151515; outline-offset: 2px; }"
+    },
+    {
+      "name": "Outline Button",
+      "kind": "button",
+      "refersTo": "button-outline",
+      "description": "Secondary actions: copy, edit, delete, import/export, manage library.",
+      "html": "<button class=\"ds-btn-outline\">管理 library</button>",
+      "css": ".ds-btn-outline { background: transparent; color: #151515; border: 1px solid rgba(21,21,21,0.4); border-radius: 3px; padding: 4px 8px; font-family: 'Barlow Condensed', 'Univers Condensed', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; } .ds-btn-outline:focus-visible { outline: 2px solid #151515; outline-offset: 2px; }"
+    },
+    {
+      "name": "Errata Slip",
+      "kind": "custom",
+      "refersTo": "errata-slip",
+      "description": "The only interruption: permission, target or paste/save failure, with at most one action.",
+      "html": "<div class=\"ds-errata\"><span class=\"ds-errata-stamp\">ERRATA</span><span class=\"ds-errata-text\">需要輔助使用權限才能貼上。</span><button class=\"ds-errata-action\">開啟設定</button></div>",
+      "css": ".ds-errata { display: flex; align-items: baseline; gap: 10px; background: #D9381E; color: #FFFFFF; border-radius: 2px; padding: 8px 12px; } .ds-errata-stamp { font-family: 'SF Mono', ui-monospace, monospace; font-size: 9.5px; font-weight: 700; padding: 1px 4px; border: 1px solid rgba(255,255,255,0.8); border-radius: 2px; } .ds-errata-text { flex: 1; font-size: 12.5px; font-weight: 500; } .ds-errata-action { background: rgba(255,255,255,0.18); color: #FFFFFF; border: 0; border-radius: 3px; padding: 3px 8px; font-family: 'Barlow Condensed', 'Univers Condensed', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; } .ds-errata-action:focus-visible { outline: 2px solid #FFFFFF; outline-offset: 1px; }"
+    },
+    {
+      "name": "Acetate Field",
+      "kind": "input",
+      "refersTo": "field-acetate",
+      "description": "Prompt body editor field with mono label.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-field-label\">內容（原文貼上，不做轉換）</span><textarea class=\"ds-field-input\">請先核對目前 workspace 與 Git root。</textarea></label>",
+      "css": ".ds-field { display: flex; flex-direction: column; gap: 5px; background: #E6E2D9; padding: 20px; } .ds-field-label { font-family: 'SF Mono', ui-monospace, monospace; font-size: 10px; font-weight: 600; color: #4A463F; } .ds-field-input { background: #F4F2EC; color: #151515; border: 1px solid rgba(21,21,21,0.25); border-radius: 3px; padding: 6px; min-height: 120px; font-family: 'Songti TC', serif; font-size: 15px; line-height: 1.6; resize: none; } .ds-field-input:focus-visible { outline: 2px solid #151515; outline-offset: 1px; }"
+    },
+    {
+      "name": "Key Hints",
+      "kind": "custom",
+      "refersTo": "label",
+      "description": "Leaf footer keycaps when nothing needs attention.",
+      "html": "<div class=\"ds-keys\"><span><b>← →</b> 分類</span><span><b>↑ ↓</b> 項目</span><span><b>↩</b> 貼上</span><span><b>esc</b> 關閉</span></div>",
+      "css": ".ds-keys { display: flex; gap: 14px; background: #F4F2EC; color: #4A463F; padding: 8px 0; font-size: 11px; } .ds-keys b { font-family: 'SF Mono', ui-monospace, monospace; font-size: 10px; font-weight: 600; margin-right: 4px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Reference Manual Beside the Pointer",
+    "overview": "Prompt Wheel is a boxed-software reference manual lying open next to the cursor. Every category is a stepped divider tab on a left rail; the open tab physically reaches across the gap into a full-hue section board; the prompts sit on a milk-acetate leaf laid over that board, held by two punched holes on its bound edge. It is a printed object, so it keeps one light palette whatever the system appearance, and it changes the way paper changes: in steps, never in tweens.\n\nDensity is that of a manual's index page: all categories visible at once, tab length showing how much each section holds, the user's own prompt text set as real readable serif lines rather than truncated chips. Three type voices carry the manual: condensed grotesk lettering for names and actions, a book serif for the user's words, monospace for counts, keycaps and file names. Vermilion is held back for errata, the only thing allowed to interrupt.\n\nThe world replaced a centred grey search palette and an earlier floating ring of capsules; neither form returns. Both shipped surfaces (the summoned picker and the Prompt Library window with its editor sheet) are built from the same tab, board, leaf and hole parts.",
+    "keyCharacteristics": [
+      "Seven full-strength section hues assigned by category order, each with a fixed ink.",
+      "An opaque milk-acetate leaf (never tinted by the board) with a lit top edge and soft contact shadow.",
+      "Divider tabs whose length encodes prompt count; the active tab squares off and joins its board.",
+      "Punched holes: two on the leaf's bound edge, one marking the selected row, the board showing through.",
+      "Fixed light appearance (`.aqua`) in both system appearances; instant section changes."
+    ],
+    "rules": [
+      {
+        "name": "The Section Hue Rule",
+        "body": "A category's hue comes from its position, never from its meaning or a user choice. All seven hues stay at full strength; a hue is never desaturated, lightened or used as decoration outside its tab, board, holes and selected row.",
+        "section": "colors"
+      },
+      {
+        "name": "The Ink Pairing Rule",
+        "body": "Every board ships with a fixed ink that clears 4.5:1: near-black on oxide-orange, chrome-yellow, grass and teal; white on ultramarine, violet and sienna. A new or adjusted hue must name its ink and pass before it ships.",
+        "section": "colors"
+      },
+      {
+        "name": "The Errata Only Rule",
+        "body": "Vermilion appears only on the errata slip. It is never a section hue, never a selection color, never an accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Printed Object Rule",
+        "body": "Every Prompt Wheel window and sheet forces the light (`.aqua`) appearance. The manual does not follow Dark Mode.",
+        "section": "colors"
+      },
+      {
+        "name": "The Three Voices Rule",
+        "body": "Condensed grotesk for names and actions, Songti TC for the user's prompt text, mono only for counts, keycaps, file names and meta lines. Prompt text is never set in the grotesk or the mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Han Punctuation Rule",
+        "body": "Prompt text uses Songti TC, not the system serif; the system serif's CJK fallback opens gaps around 、，。.",
+        "section": "typography"
+      },
+      {
+        "name": "The Still Panel Rule",
+        "body": "The picker is placed once and never moves or resizes under the pointer while open; only the user's drag moves it.",
+        "section": "layout"
+      },
+      {
+        "name": "The Tab Extent Rule",
+        "body": "A tab's length says how many prompts its section holds; it is never set for decoration or to fit its label.",
+        "section": "layout"
+      },
+      {
+        "name": "The Soft Contact Rule",
+        "body": "Shadows are soft and short, describing a physical stack. They never respond to hover.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Step Not Tween Rule",
+        "body": "Every change in the manual is an instant swap: switching sections, selecting rows and hover states all apply with animation disabled. The contract's 90ms two-step became a plain step.",
+        "section": "components"
+      },
+      {
+        "name": "The First Click Rule",
+        "body": "The picker never activates the app, so its views accept the first mouse click; a click is never spent focusing the window.",
+        "section": "components"
+      }
+    ],
+    "dos": [
+      "Do assign section hues by category order (`i mod 7`) and draw tab, board, holes and selected-row tint from the same hue.",
+      "Do pair every board with its fixed ink and verify at least 4.5:1 before shipping a hue change.",
+      "Do keep the picker 700 x 440pt with a 168pt rail, placed once with the first tab under the pointer, and never resize it while open.",
+      "Do keep the acetate leaf opaque (#F4F2EC) with its lit edge, contact shadow and two punched holes.",
+      "Do set the user's prompt text in Songti TC, names and actions in Barlow Condensed, and counts, keycaps and meta lines in mono.",
+      "Do report problems on the vermilion errata slip in the leaf footer, in plain words, with at most one action.",
+      "Do force the light appearance on every window and sheet."
+    ],
+    "donts": [
+      "Don't use vermilion for anything but errata.",
+      "Don't tween or ease section, selection or hover changes; swap them instantly.",
+      "Don't open a category on hover; hover is visual only.",
+      "Don't make the leaf translucent or let it tint per board.",
+      "Don't follow system Dark Mode.",
+      "Don't set tab length by label width or taste; it encodes prompt count.",
+      "Don't use hard, zero-blur offset shadows or hover-driven shadows.",
+      "Don't set display lettering in a system font; the condensed face is bundled for that role.",
+      "Don't add uppercase kicker or eyebrow labels above titles; meta lines sit below the title in mono.",
+      "Don't return to a centred grey search palette or a floating ring of capsules."
+    ]
+  }
+}

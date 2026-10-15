@@ -1,57 +1,116 @@
 # Prompt Wheel
 
-原生 macOS 小工具：**⌥ Space → 選取 Markdown prompt → 貼到原 App**。
-SwiftUI + AppKit，沒有第三方套件。最低 macOS 15.2。
+**English** · [繁體中文](README.zh-TW.md)
 
-## Build / Run
+**Your best prompts, one keystroke away — in any app on your Mac.**
 
-需要 Swift 6 的 Xcode Command Line Tools 或 Xcode。
+Press **⌥ Space** in any text field, pick a prompt, and Prompt Wheel pastes it right where your cursor was. Exactly once, and never sent. Your library is just a folder of Markdown files you own.
 
-```sh
-./scripts/build.sh
-open "dist/Prompt Wheel.app"
+![Prompt Wheel: colour tabs for categories on the left, prompts in two columns on the right, a preview at the bottom](docs/screenshots/picker.png)
+
+| Type to search every prompt | Manage your library |
+| --- | --- |
+| ![Search results across all categories, each marked with its category colour](docs/screenshots/picker-search.png) | ![Library window: category tabs, prompt list and full text](docs/screenshots/library.png) |
+
+<sub>Screenshots show the sample prompts that ship with the app.</sub>
+
+## Why Prompt Wheel
+
+If you work all day in Codex, ChatGPT, Claude or your editor, you type the same instructions over and over: *start work*, *review this diff*, *find the root cause*, *final check*. Prompt Wheel keeps them in one place and puts them back into whichever app you are typing in, without leaving it.
+
+- **Appears at your pointer.** A small panel opens next to the mouse, over any app, on any Space, including full-screen apps.
+- **Hover to browse.** Each category is a colour tab. Rest the pointer on a tab and its prompts appear; click a prompt to paste it.
+- **Type to search.** Start typing as soon as the panel opens to search titles and text across every category. Input methods such as Zhuyin and Pinyin work.
+- **Pastes once, never sends.** Prompt Wheel sends a single ⌘V to the app you came from. It never presses Return, so you can edit before you send.
+- **Your files, verbatim.** Categories are folders and prompts are `.md` files. Line breaks and code fences are pasted exactly as written.
+- **Stays out of the way.** Drag the panel aside and it reopens there next time. It lives in the menu bar, not the Dock.
+- **Built-in library manager.** Create, edit, recategorise and delete prompts, or import and export the whole library as JSON.
+- **Native and small.** SwiftUI + AppKit, no third-party dependencies, no network access.
+
+## Install
+
+Prompt Wheel is currently distributed as source. Building it takes about a minute.
+
+**Requirements**
+
+- macOS 15.2 or later
+- Xcode, or the Xcode Command Line Tools with Swift 6 (`xcode-select --install`)
+
+**1. Build**
+
+```bash
+git clone https://github.com/kevcltsai/prompt-wheel.git
 ```
 
-這是 Swift package 專案，可用 Xcode 開啟 `Package.swift`。建置腳本會產出
-完整的 `.app`、Info.plist 與 Markdown resources，並進行本機 ad-hoc 簽章。
-請啟動 `.app`，不要用 `swift run PromptWheel`；未封裝的 binary 沒有 prompt resources。
-`dist/` 是本機產物，不進版控。更新前請從選單列 Quit Prompt Wheel。
+```bash
+cd prompt-wheel && ./scripts/build.sh
+```
 
-此版本供本機使用，未做 Developer ID 公證，未啟用 App Sandbox。
-可設定 `PROMPT_WHEEL_SIGNING_IDENTITY` 使用自己的 code-signing identity。
-保持 app 路徑穩定；ad-hoc 重建後 macOS 可能要求重新授予輔助使用權限。
+This creates `dist/Prompt Wheel.app`, signed locally (ad hoc).
 
-## 使用
+**2. Move it to Applications**
 
-1. 啟動後在 macOS 選單列找到文字泡泡圖示。
-2. 從選單列選 **Enable Accessibility…**，在系統設定 → 隱私權與安全性 →
-   輔助使用，啟用 **Prompt Wheel**。必要時用 `+` 加入建置出的 `.app`。
-3. 在 Codex、ChatGPT 或其他 App 中點選要輸入文字的欄位。
-4. 按 **⌥ Space** 開啟透明、置頂的圓形 Prompt Wheel。拖曳中央圓心可移動圓盤；
-   展開中的子選單會跟著移動，圓盤會留在可視螢幕內。游標停在分類上時會略微放大，
-   並在同一視窗展開標題／摘要清單；移入 prompt 預覽全文，點擊 prompt 才會貼上。
-   分類超過圓環可容納的數量時，選 **More +N** 開啟完整分類清單。
-5. 鍵盤使用 **← / →** 切換分類、**↑ / ↓** 選取 prompt，**放開 Enter** 後貼上。
-   **Escape** 取消。選單列的 **Manage Prompt Library…** 會開啟獨立視窗，
-   用來新增、編輯、刪除、匯入與匯出 prompts。
+```bash
+mkdir -p ~/Applications && ditto "dist/Prompt Wheel.app" ~/Applications/"Prompt Wheel.app"
+```
 
-App 只產生一次 Command-V，不產生 Enter，不自動送出。不要在選取時持續
-壓住 Option 等修飾鍵；App 最多等待三秒，逾時會顯示錯誤。
-一般文字輸入框是驗收對象；目標 App 自行限制貼上、唯讀或受保護的欄位
-不會因為這個工具而變成可編輯。事件送出不代表能知道目標是否接受文字。
+```bash
+open ~/Applications/"Prompt Wheel.app"
+```
 
-### ⌥ Space 衝突
+A speech-bubble icon appears in the menu bar.
 
-ChatGPT macOS 預設也使用 ⌥ Space。若註冊失敗，選單列會顯示錯誤碼；
-請先在衝突 App 的設定中改掉其綁定，再選 **Retry Global Hotkey**。
-衝突時仍可用 **Open Prompt Wheel** 開啟圓環。Prompt Wheel 不會自動修改
-其他 App，也不會偷偷換成別的快捷鍵。
-其他事件監聽型快捷鍵工具可能不會造成 Carbon 註冊錯誤，仍需實際確認
-按鍵沒有同時觸發它們。V1 快捷鍵固定，尚未提供自訂 shortcut recorder。
+**3. Allow pasting (Accessibility)**
 
-## Markdown library
+Prompt Wheel needs Accessibility permission to paste into other apps.
 
-第一次啟動會將 repository 的 `Prompts/` 範例複製到：
+1. Click the menu-bar icon and choose **Enable Accessibility…**.
+2. In **System Settings → Privacy & Security → Accessibility**, turn on **Prompt Wheel**. If it is not listed, click **+** and add `~/Applications/Prompt Wheel.app`.
+3. Quit Prompt Wheel from its menu and open it again.
+
+The menu now shows **Accessibility: Granted…**.
+
+### Updating
+
+Quit Prompt Wheel, pull, rebuild and copy the app again (steps 1–2). Each local build is signed differently, so macOS treats it as a new app. Remove the old **Prompt Wheel** entry under Accessibility, add the new one, and relaunch.
+
+To avoid granting permission after every update, create a self-signed **Code Signing** certificate in Keychain Access and build with it:
+
+```bash
+PROMPT_WHEEL_SIGNING_IDENTITY="Your Certificate Name" ./scripts/build.sh
+```
+
+### Uninstalling
+
+Quit Prompt Wheel and delete `~/Applications/Prompt Wheel.app`. Your prompts stay in `~/Library/Application Support/Prompt Wheel/Prompts/`. Delete that folder only if you no longer want them.
+
+## Using Prompt Wheel
+
+1. Click into a text field in Codex, ChatGPT, Claude or any other app.
+2. Press **⌥ Space**. The panel opens with the first category tab under your pointer.
+3. Rest the pointer on a category tab to open it, or click it.
+4. Move over a prompt to see a summary in the preview strip, then **click** it to paste.
+
+| Key | Action |
+| --- | --- |
+| Type | Search every prompt |
+| ← / → | Previous / next category |
+| 1–9 | Jump to a category |
+| ↑ / ↓ | Select a prompt |
+| Return (on release) | Paste the selected prompt |
+| Esc | Clear the search, then close |
+
+**Moving the panel:** drag the top row or the coloured border. Prompt Wheel remembers where you left it on that display. Choose **Reset Picker Position** from the menu to go back to opening at the pointer.
+
+**Manage Prompt Library…** in the menu bar opens a separate window where you can add, edit, recategorise, copy and delete prompts, and import or export JSON.
+
+### ⌥ Space is already taken
+
+ChatGPT for macOS also uses ⌥ Space by default. If Prompt Wheel cannot register the shortcut, its menu shows a warning with the error code. Change the shortcut in the other app, then choose **Retry Global Hotkey**. You can always open the panel from **Open Prompt Wheel** in the menu. The shortcut is fixed to ⌥ Space in this version.
+
+## Your prompt library
+
+On first launch, Prompt Wheel copies the sample prompts to:
 
 ```text
 ~/Library/Application Support/Prompt Wheel/Prompts/
@@ -66,40 +125,37 @@ ChatGPT macOS 預設也使用 ⌥ Space。若註冊失敗，選單列會顯示�
 └── General/Clarify Next Step.md
 ```
 
-已有資料夾不會被覆寫。分類＝第一層資料夾名稱；prompt 名稱＝Markdown
-檔名去掉副檔名；內容＝UTF-8 原文，保留換行與 code fence。
-可自行新增分類。隱藏檔案、非 `.md` 檔案與更深層巢狀資料夾不載入。
-每次開啟 panel 重新掃描，選取時重新讀檔；不需要重啟 app。
-
-從選單列 **Manage Prompt Library…** 開啟獨立管理視窗，可新增、編輯、
-重新分類與刪除 prompt。分類、標題和內文會直接儲存到目前的 Markdown
-library；同名項目不會被覆寫。**匯入 JSON…** 和 **匯出 JSON…** 可備份或移轉
-library；匯入時略過同名項目。匯入格式是
-Prompt Wheel 匯出的 JSON 陣列，每筆含 `category`、`title`、`body`。
-
-選取項目後也可按 **複製** 作為手動 fallback。它只會複製到剪貼簿，不會自動
-貼上；按 Escape 關閉選單，再於目標輸入框按 ⌘V。成功或失敗都會明確顯示狀態。
-
-選單列提供 **Open Prompt Folder…**、**Choose Prompt Folder…**，路徑會保存。
-G/I/R/D 的分類快捷鍵尚未啟用，仍使用方向鍵切換分類。
+- Each top-level folder is a **category**. Each `.md` file is a **prompt**. The file name, without `.md`, is its **title**.
+- The file's UTF-8 text is pasted verbatim, with no rendering or trimming.
+- Hidden files, non-`.md` files and deeper subfolders are ignored.
+- The folder is rescanned each time the panel opens, so edits in your own editor show up immediately.
+- An existing library is never overwritten. Use **Choose Prompt Folder…** to point Prompt Wheel at another folder, for example one you sync.
+- Import skips any prompt whose category and title already exist. The JSON format is an array of `{ "category", "title", "body" }`.
 
 ## Clipboard
 
-預設 **Restore Clipboard after Paste 關閉**，貼上後 clipboard 留下 prompt。
-開啟時先保存所有可讀取的剪貼簿項目與格式，發出貼上事件約 0.9 秒後，
-僅在剪貼簿仍未被其他操作更動時還原。遇到無法保存的格式，會在改動
-剪貼簿前中止並提示。無法跨所有 App 保證讀取完成的時點，還原是 best effort；
-若目標貼上速度慢，請保持此選項關閉。Escape 取消選單不會改動剪貼簿。
+Pasting places the prompt on the clipboard. It stays there by default.
 
-## Verification
+Turn on **Restore Clipboard after Paste** in the menu to put your previous clipboard back about 0.9 seconds after pasting. All readable formats are saved first. The restore is skipped if you copy something new in the meantime. Some apps read the clipboard slowly, so this setting is off by default.
 
-```sh
+## Privacy
+
+Prompt Wheel makes no network connections and collects nothing. It reads your prompt folder, and when you choose a prompt it writes that prompt to the clipboard and sends one ⌘V to the app you were using.
+
+## Development
+
+```bash
 ./scripts/test.sh
+```
+
+```bash
 ./scripts/build.sh
 ```
 
-Tests 使用暫存資料夾與私有 named pasteboard，不讀寫一般使用者剪貼簿。
-涵蓋 library、按鍵選取狀態與多格式剪貼簿還原。這些不取代實際跨 App GUI
-驗證。執行紀錄與待手動驗證項目見 `tasks/verification.md`。
+The checks run without Xcode's test runner. They use temporary folders and a private pasteboard and never touch your real clipboard. Launch the built `.app` rather than `swift run`; the bare binary has no bundled prompts or fonts.
 
-規劃及 scope：`tasks/plan.md`。工作進度：`tasks/todo.md`。
+Design notes are in [DESIGN.md](DESIGN.md) and the product brief is in [PRODUCT.md](PRODUCT.md).
+
+## License
+
+[MIT](LICENSE). The bundled Barlow Condensed font is licensed under the SIL Open Font License 1.1; see [`App/Fonts/OFL.txt`](App/Fonts/OFL.txt).

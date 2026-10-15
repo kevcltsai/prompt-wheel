@@ -4,78 +4,85 @@ import PromptWheelCore
 
 @MainActor
 final class MenuModel: ObservableObject {
-    @Published var categories: [PromptCategory] = []
+    @Published var categories: [PromptCategory] = [] { didSet { refreshPreviews() } }
     @Published var selectedID: URL?
     @Published var message: String?
     @Published var isWorking = false
+    @Published var pastingID: URL?
     @Published var needsPermission = false
     @Published var activeCategoryName: String?
-    @Published var hoveredPrompt: Prompt?
-    @Published var previewText: String?
-    @Published var submenuPresented = false
-    @Published var showingCategoryOverflow = false
-    @Published var overflowSelectedIndex = 0
-    @Published var hoveredCategoryName: String?
-    @Published var wheelSize: CGFloat = 280
-    @Published var submenuWidth: CGFloat = 440
-    @Published var submenuHeight: CGFloat = 360
-    @Published var submenuVertical = false
+    @Published private(set) var previews: [URL: String] = [:]
     @Published var editorDraft = PromptDraft(category: "General", title: "", body: "")
     @Published var editingPrompt: Prompt?
     @Published var editorPresented = false
     @Published var editorMessage: String?
     @Published var deleteCandidate: Prompt?
-    var targetName = "原 App"
-    var activeCategory: PromptCategory? { categories.first { $0.name == activeCategoryName } }
+    @Published var targetName = "原 App"
+    /// Pointer hover, kept here because Command Line Tools builds lack the @State macro.
+    @Published var hoveredTab: String?
+    @Published var hoveredRow: URL?
+    /// What the user has typed into the picker's search field.
+    @Published var query = "" { didSet { if query != oldValue { searchChanged() } } }
+    var hasTarget = false
+
+    var isSearching: Bool { !query.trimmingCharacters(in: .whitespaces).isEmpty }
+    var searchResults: [Prompt] {
+        PromptSearch.results(for: query, in: categories.flatMap(\.prompts).map {
+            PromptSearch.Entry(prompt: $0, text: previews[$0.id] ?? "")
+        })
+    }
+    /// The prompts the leaf is showing: search results across the library, or the open section.
+    var visiblePrompts: [Prompt] { isSearching ? searchResults : activePrompts }
+    /// The prompt the preview strip describes: under the pointer, else the selection.
+    var previewPrompt: Prompt? {
+        let visible = visiblePrompts
+        return visible.first { $0.id == hoveredRow } ?? visible.first { $0.id == selectedID }
+    }
+    func hueIndex(for prompt: Prompt) -> Int { categories.firstIndex { $0.name == prompt.category } ?? 0 }
+
+    private func searchChanged() {
+        hoveredRow = nil
+        selectedID = visiblePrompts.first?.id
+    }
+
+    var activeIndex: Int? { categories.firstIndex { $0.name == activeCategoryName } }
+    var activeCategory: PromptCategory? { activeIndex.map { categories[$0] } }
     var activePrompts: [Prompt] { activeCategory?.prompts ?? [] }
-    var expandedPanelSize: NSSize {
-        if submenuVertical {
-            return NSSize(width: max(wheelSize, submenuWidth) + 24,
-                          height: wheelSize + submenuHeight + 34)
+
+    /// Text for display only, read once per reload rather than on every render.
+    /// Paste always re-reads the file so an external edit is never stale.
+    func previewText(_ prompt: Prompt) -> String? { previews[prompt.id] }
+
+    func excerpt(_ prompt: Prompt) -> String {
+        guard let text = previews[prompt.id] else { return "無法讀取這個 Markdown 檔案。" }
+        let lines = text.split(whereSeparator: \.isNewline).map { $0.trimmingCharacters(in: .whitespaces) }
+        let joined = lines.filter { !$0.isEmpty }.joined(separator: " ")
+        return joined.isEmpty ? "（空白內容）" : joined
+    }
+
+    func open(_ category: PromptCategory) {
+        activeCategoryName = category.name
+        selectedID = category.prompts.first?.id
+    }
+
+    private func refreshPreviews() {
+        var next: [URL: String] = [:]
+        for prompt in categories.flatMap(\.prompts) {
+            next[prompt.id] = try? PromptLibrary.read(prompt)
         }
-        return NSSize(width: wheelSize + submenuWidth + 36,
-                      height: max(wheelSize, submenuHeight) + 24)
+        previews = next
     }
 }
 
 @MainActor
 final class KeyboardPanel: NSPanel {
     var handleKey: ((NSEvent) -> Bool)?
-    private(set) var inputEventTally = PanelInputEventTally()
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
     override func sendEvent(_ event: NSEvent) {
-        recordMouseEvent(event)
         if (event.type == .keyDown || event.type == .keyUp), handleKey?(event) == true { return }
         super.sendEvent(event)
-    }
-
-    func recordSwiftUIEvent(_ eventType: String, view: String) {
-        inputEventTally.record(eventType: eventType, stage: "SwiftUI", view: view, windowMatches: true)
-    }
-
-    private func recordMouseEvent(_ event: NSEvent) {
-        let name: String
-        switch event.type {
-        case .mouseEntered: name = "mouseEntered"
-        case .mouseExited: name = "mouseExited"
-        case .mouseMoved: name = "mouseMoved"
-        case .leftMouseDown: name = "leftMouseDown"
-        case .leftMouseDragged: name = "leftMouseDragged"
-        case .leftMouseUp: name = "leftMouseUp"
-        default: return
-        }
-        let matches = event.windowNumber == windowNumber
-        let hitTestView: String
-        if matches, let contentView {
-            let point = contentView.convert(event.locationInWindow, from: nil)
-            hitTestView = contentView.hitTest(point).map { String(reflecting: type(of: $0)) } ?? "nil"
-        } else {
-            hitTestView = "window-mismatch"
-        }
-        inputEventTally.record(eventType: name, stage: "AppKit hitTest", view: hitTestView,
-                               windowMatches: matches)
     }
 }
 
@@ -84,22 +91,19 @@ final class PromptPanel: NSObject, NSWindowDelegate {
     let model = MenuModel()
     private let panel: KeyboardPanel
     private var navigation = MenuNavigation()
-    private var categoryNavigation = WheelCategoryNavigation()
-    private var submenuCloseTask: Task<Void, Never>?
-    private var wheelCenter: NSPoint?
-    private var dragStartFrame: NSRect?
+    private let settings = Settings()
+    private var hoverSwitch: Task<Void, Never>?
     private var isDismissing = false
+    private weak var searchField: NSTextField?
     var onSelect: ((Prompt) -> Void)?
     var onCancel: (() -> Void)?
     var onPermissions: (() -> Void)?
     var onManage: (() -> Void)?
     var isVisible: Bool { panel.isVisible }
-    var ignoresMouseEvents: Bool { panel.ignoresMouseEvents }
-    var acceptsMouseMovedEvents: Bool { panel.acceptsMouseMovedEvents }
-    var inputEventTally: PanelInputEventTally { panel.inputEventTally }
+    var isModalInteraction = false
 
     override init() {
-        panel = KeyboardPanel(contentRect: NSRect(x: 0, y: 0, width: 280, height: 280),
+        panel = KeyboardPanel(contentRect: NSRect(origin: .zero, size: SectionIndex.panelSize),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         super.init()
         panel.title = "Prompt Wheel"
@@ -107,648 +111,517 @@ final class PromptPanel: NSObject, NSWindowDelegate {
         panel.isFloatingPanel = true
         panel.hidesOnDeactivate = false
         panel.becomesKeyOnlyIfNeeded = false
+        panel.acceptsMouseMovedEvents = true
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = false
+        // The manual is a printed object: its palette does not follow Dark Mode.
+        panel.appearance = NSAppearance(named: .aqua)
         panel.delegate = self
         panel.handleKey = { [weak self] in self?.handle($0) ?? false }
-        panel.contentView = NSHostingView(rootView: PromptWheelView(model: model,
-            selectCategory: { [weak self] in self?.activate($0) },
-            hoverCategory: { [weak self] category, inside in
-                guard let self else { return }
-                if inside {
-                    self.activate(category)
-                } else {
-                    self.scheduleSubmenuCollapse()
-                }
-            },
-            hoverPanel: { [weak self] inside in
-                guard let self else { return }
-                if inside {
-                    self.cancelSubmenuCollapse()
-                } else if self.model.submenuPresented {
-                    self.scheduleSubmenuCollapse()
-                }
-            },
-            moveWheel: { [weak self] in self?.moveWheel(by: $0) },
-            endWheelDrag: { [weak self] in self?.endWheelDrag() },
-            recordInputEvent: { [weak self] type, view in
-                self?.panel.recordSwiftUIEvent(type, view: view)
-            },
+        panel.contentView = FirstClickHostingView(rootView: PickerView(model: model,
+            openCategory: { [weak self] in self?.open($0) },
+            hoverCategory: { [weak self] in self?.hover($0, inside: $1) },
             selectPrompt: { [weak self] in self?.onSelect?($0) },
             manage: { [weak self] in self?.onManage?() },
-            showMoreCategories: { [weak self] in self?.showMoreCategories() }))
+            permissions: { [weak self] in self?.onPermissions?() },
+            moved: { [weak self] in self?.rememberPosition() },
+            searchFieldReady: { [weak self] in self?.searchField = $0 }))
     }
 
-    func show(categories: [PromptCategory], targetName: String, message: String? = nil) {
-        cancelSubmenuCollapse()
-        wheelCenter = nil
-        dragStartFrame = nil
+    func show(categories: [PromptCategory], targetName: String, hasTarget: Bool, message: String? = nil) {
         navigation.reset()
-        categoryNavigation.reset(activeCategoryName: categories.first?.name)
         model.targetName = targetName
+        model.hasTarget = hasTarget
         model.categories = categories
-        model.activeCategoryName = categories.first?.name
-        model.selectedID = categories.first?.prompts.first?.id
-        model.hoveredPrompt = nil
-        model.previewText = nil
-        model.submenuPresented = false
+        // Reopen on the section used last time when it still exists.
+        if let current = model.activeCategory {
+            model.open(current)
+        } else if let first = categories.first {
+            model.open(first)
+        } else {
+            model.activeCategoryName = nil
+            model.selectedID = nil
+        }
+        model.query = ""
+        searchField?.stringValue = ""
         model.message = message
+        model.pastingID = nil
         model.needsPermission = !PasteController.hasPermission
+        // Placed once; the panel never moves or resizes until the user drags it.
+        // After a drag it reopens where the user left it, on that display.
         let pointer = NSEvent.mouseLocation
         if let screen = NSScreen.screens.first(where: { $0.frame.contains(pointer) }) ?? NSScreen.main {
-            let bounds = screen.visibleFrame.insetBy(dx: 10, dy: 10)
-            let available = bounds.size
-            model.submenuVertical = available.width < 690 || available.height < 480
-            if model.submenuVertical {
-                model.wheelSize = min(280, available.width * 0.62, available.height * 0.42)
-                model.submenuWidth = min(440, max(1, available.width - 24))
-                model.submenuHeight = min(360, max(1, available.height - model.wheelSize - 36))
-            } else {
-                model.wheelSize = min(280, available.height - 24)
-                model.submenuWidth = min(440, max(1, available.width - model.wheelSize - 36))
-                model.submenuHeight = min(360, available.height - 24)
-            }
-            let size = NSSize(width: model.wheelSize, height: model.wheelSize)
-            let origin = NSPoint(x: min(max(pointer.x - size.width / 2, bounds.minX), bounds.maxX - size.width),
-                                 y: min(max(pointer.y - size.height / 2, bounds.minY), bounds.maxY - size.height))
-            panel.setFrame(NSRect(origin: origin, size: size), display: false)
-            wheelCenter = NSPoint(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
+            let origin = SectionIndex.restoredOrigin(saved: settings.pickerOrigin, pointer: pointer,
+                                                     visibleFrames: NSScreen.screens.map(\.visibleFrame))
+                ?? SectionIndex.origin(pointer: pointer, visibleFrame: screen.visibleFrame)
+            panel.setFrame(NSRect(origin: NSPoint(x: origin.x, y: origin.y), size: SectionIndex.panelSize),
+                           display: false)
         }
         panel.makeKeyAndOrderFront(nil)
+        // Typing goes straight into search, including through an input method.
+        if let searchField { panel.makeFirstResponder(searchField) }
     }
 
     func hide() {
         guard !isDismissing else { return }
-        cancelSubmenuCollapse()
-        dragStartFrame = nil
         isDismissing = true
         defer { isDismissing = false }
         navigation.reset()
-        model.submenuPresented = false
-        model.showingCategoryOverflow = false
+        hoverSwitch?.cancel()
         panel.orderOut(nil)
     }
 
     func windowDidResignKey(_ notification: Notification) {
-        if panel.isVisible && !isDismissing && !model.editorPresented && !isModalInteraction {
+        if panel.isVisible && !isDismissing && !isModalInteraction {
             onCancel?()
         }
     }
 
-    var isModalInteraction = false
-
-    private func activate(_ category: PromptCategory) {
-        cancelSubmenuCollapse()
-        guard let category = categoryNavigation.open(categoryName: category.name, in: model.categories) else { return }
-        model.activeCategoryName = categoryNavigation.activeCategoryName
-        model.selectedID = category.prompts.first?.id
-        model.hoveredPrompt = nil
-        model.previewText = nil
-        model.showingCategoryOverflow = false
+    private func open(_ category: PromptCategory) {
+        guard !model.isWorking else { return }
         navigation.reset()
-        model.submenuPresented = categoryNavigation.submenuPresented
-        expandPanel()
-    }
-
-    private func showMoreCategories() {
-        let overflowCount = max(0, model.categories.count - 13)
-        guard overflowCount > 0 else { return }
-        cancelSubmenuCollapse()
-        model.showingCategoryOverflow = true
-        model.overflowSelectedIndex = 0
-        model.submenuPresented = true
-        navigation.reset()
-        expandPanel()
-    }
-
-    private func collapseSubmenu() {
-        guard model.submenuPresented else { return }
-        cancelSubmenuCollapse()
-        let oldFrame = panel.frame
-        let center: NSPoint
-        if model.submenuVertical {
-            center = NSPoint(x: oldFrame.midX, y: oldFrame.maxY - 12 - model.wheelSize / 2)
-        } else {
-            center = NSPoint(x: oldFrame.minX + 12 + model.wheelSize / 2, y: oldFrame.midY)
+        // Choosing a section leaves search mode.
+        if model.isSearching {
+            model.query = ""
+            searchField?.stringValue = ""
         }
-        model.submenuPresented = false
-        categoryNavigation.collapseSubmenu()
-        model.showingCategoryOverflow = false
-        model.hoveredPrompt = nil
-        model.previewText = nil
-        let size = NSSize(width: model.wheelSize, height: model.wheelSize)
-        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(center) }) ?? NSScreen.main else {
-            panel.setFrame(NSRect(origin: NSPoint(x: center.x - size.width / 2,
-                                                  y: center.y - size.height / 2), size: size), display: true)
-            return
-        }
-        let bounds = screen.visibleFrame.insetBy(dx: 10, dy: 10)
-        let origin = NSPoint(x: min(max(center.x - size.width / 2, bounds.minX), bounds.maxX - size.width),
-                             y: min(max(center.y - size.height / 2, bounds.minY), bounds.maxY - size.height))
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
-        wheelCenter = NSPoint(x: origin.x + size.width / 2, y: origin.y + size.height / 2)
+        model.open(category)
     }
 
-    private func moveWheel(by translation: CGSize) {
-        if dragStartFrame == nil { dragStartFrame = panel.frame }
-        guard let startFrame = dragStartFrame,
-              let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })
-                ?? NSScreen.screens.first(where: { $0.frame.intersects(panel.frame) })
-                ?? NSScreen.main else { return }
-        let proposed = WheelPanelGeometry.translatedOrigin(
-            from: CGPoint(x: startFrame.minX, y: startFrame.minY), by: translation)
-        let origin = WheelPanelGeometry.clampedOrigin(
-            proposed: proposed,
-            panelSize: CGSize(width: panel.frame.width, height: panel.frame.height),
-            visibleFrame: screen.visibleFrame)
-        panel.setFrameOrigin(NSPoint(x: origin.x, y: origin.y))
+    /// Resting on a tab opens its section. The short dwell keeps a pointer that only
+    /// crosses other tabs on its way to the board from switching sections.
+    private func hover(_ category: PromptCategory, inside: Bool) {
+        hoverSwitch?.cancel()
+        if inside {
+            model.hoveredTab = category.name
+            guard category.name != model.activeCategoryName || model.isSearching else { return }
+            hoverSwitch = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(45))
+                guard let self, !Task.isCancelled, self.model.hoveredTab == category.name else { return }
+                self.open(category)
+            }
+        } else if model.hoveredTab == category.name {
+            model.hoveredTab = nil
+        }
+    }
+
+    var hasSavedPosition: Bool { settings.pickerOrigin != nil }
+
+    /// Called after a native window drag ends: keep the panel on screen and remember it.
+    private func rememberPosition() {
         let frame = panel.frame
-        if model.submenuPresented {
-            wheelCenter = model.submenuVertical
-                ? NSPoint(x: frame.midX, y: frame.maxY - 12 - model.wheelSize / 2)
-                : NSPoint(x: frame.minX + 12 + model.wheelSize / 2, y: frame.midY)
-        } else {
-            wheelCenter = NSPoint(x: frame.midX, y: frame.midY)
-        }
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSPoint(x: frame.midX, y: frame.midY)) })
+                ?? NSScreen.main else { return }
+        let origin = WheelPanelGeometry.clampedOrigin(proposed: frame.origin,
+            panelSize: SectionIndex.panelSize, visibleFrame: screen.visibleFrame)
+        panel.setFrameOrigin(NSPoint(x: origin.x, y: origin.y))
+        settings.pickerOrigin = origin
     }
 
-    private func endWheelDrag() {
-        dragStartFrame = nil
-    }
-
-    private func scheduleSubmenuCollapse() {
-        cancelSubmenuCollapse()
-        submenuCloseTask = Task { @MainActor [weak self] in
-            do { try await Task.sleep(for: .milliseconds(180)) }
-            catch { return }
-            guard let self else { return }
-            self.submenuCloseTask = nil
-            guard self.model.submenuPresented,
-                  !self.panel.frame.contains(NSEvent.mouseLocation) else { return }
-            self.collapseSubmenu()
-        }
-    }
-
-    private func cancelSubmenuCollapse() {
-        submenuCloseTask?.cancel()
-        submenuCloseTask = nil
-    }
-
-    private func expandPanel() {
-        guard let screen = NSScreen.screens.first(where: { $0.frame.intersects(panel.frame) }) ?? NSScreen.main else {
-            panel.setContentSize(model.expandedPanelSize)
-            return
-        }
-        let bounds = screen.visibleFrame.insetBy(dx: 10, dy: 10)
-        let size = model.expandedPanelSize
-        let anchor = wheelCenter ?? NSPoint(x: panel.frame.midX, y: panel.frame.midY)
-        let proposedOrigin: NSPoint
-        if model.submenuVertical {
-            proposedOrigin = NSPoint(x: anchor.x - size.width / 2,
-                                     y: anchor.y - size.height + 12 + model.wheelSize / 2)
-        } else {
-            proposedOrigin = NSPoint(x: anchor.x - 12 - model.wheelSize / 2,
-                                     y: anchor.y - size.height / 2)
-        }
-        let origin = NSPoint(x: min(max(proposedOrigin.x, bounds.minX), bounds.maxX - size.width),
-                             y: min(max(proposedOrigin.y, bounds.minY), bounds.maxY - size.height))
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
-        wheelCenter = model.submenuVertical
-            ? NSPoint(x: origin.x + size.width / 2, y: origin.y + size.height - 12 - model.wheelSize / 2)
-            : NSPoint(x: origin.x + 12 + model.wheelSize / 2, y: origin.y + size.height / 2)
-    }
+    func resetPosition() { settings.pickerOrigin = nil }
 
     private func handle(_ event: NSEvent) -> Bool {
         if model.editorPresented { return false }
+        // While an input method is composing (e.g. Zhuyin or Pinyin), every key belongs to it.
+        if let editor = panel.firstResponder as? NSTextView, editor.hasMarkedText() { return false }
+        let isDown = event.type == .keyDown
         switch event.keyCode {
-        case 53: // Escape cancels the whole selection.
-            if event.type == .keyDown { onCancel?() }
-            return true
-        case 123, 124: // Left / Right changes category; in overflow, Left returns and Right opens.
-            guard event.type == .keyDown && !model.isWorking else { return true }
-            if model.showingCategoryOverflow {
-                if event.keyCode == 123 {
-                    collapseSubmenu()
+        case 53: // Escape clears the search first, then cancels the whole selection.
+            if isDown {
+                if model.isSearching {
+                    model.query = ""
+                    searchField?.stringValue = ""
                 } else {
-                    let extras = Array(model.categories.dropFirst(13))
-                    if extras.indices.contains(model.overflowSelectedIndex) {
-                        activate(extras[model.overflowSelectedIndex])
-                    }
-                }
-            } else {
-                let count = model.categories.count
-                if count > 0 {
-                    let current = model.categories.firstIndex { $0.name == model.activeCategoryName } ?? 0
-                    let next = min(max(current + (event.keyCode == 124 ? 1 : -1), 0), count - 1)
-                    activate(model.categories[next])
+                    onCancel?()
                 }
             }
             return true
-        case 125, 126: // Down / Up moves through prompts or overflow categories.
-            guard event.type == .keyDown && !model.isWorking else { return true }
-            if model.showingCategoryOverflow {
-                let count = max(0, model.categories.count - 13)
-                let next = min(max(model.overflowSelectedIndex + (event.keyCode == 125 ? 1 : -1), 0),
-                               max(0, count - 1))
-                model.overflowSelectedIndex = next
-                navigation.reset()
-                navigation.move(by: next, count: count)
-            } else if model.submenuPresented {
-                let count = model.activePrompts.count
-                let current = model.activePrompts.firstIndex { $0.id == model.selectedID }
-                    ?? navigation.selectedIndex
-                let next = min(max(current + (event.keyCode == 125 ? 1 : -1), 0), count - 1)
-                navigation.reset()
-                navigation.move(by: next, count: count)
-                if model.activePrompts.indices.contains(next) {
-                    let prompt = model.activePrompts[next]
-                    model.selectedID = prompt.id
-                    model.hoveredPrompt = prompt
-                    model.previewText = try? PromptLibrary.read(prompt)
-                } else {
-                    model.selectedID = nil
-                    model.hoveredPrompt = nil
-                    model.previewText = nil
-                }
-            }
+        case 123, 124: // Left / Right steps through sections; while searching they move the caret.
+            if model.isSearching { return false }
+            guard isDown, !model.isWorking, !model.categories.isEmpty else { return true }
+            let current = model.activeIndex ?? 0
+            let next = min(max(current + (event.keyCode == 124 ? 1 : -1), 0), model.categories.count - 1)
+            open(model.categories[next])
             return true
-        case 36, 76: // Return opens a category or selects a prompt; never pastes from overflow.
+        case 125, 126: // Down / Up runs down the first column, then the second.
+            guard isDown, !model.isWorking else { return true }
+            let prompts = model.visiblePrompts
+            guard !prompts.isEmpty else { return true }
+            let current = prompts.firstIndex { $0.id == model.selectedID } ?? 0
+            let next = min(max(current + (event.keyCode == 125 ? 1 : -1), 0), prompts.count - 1)
+            navigation.reset()
+            navigation.move(by: next, count: prompts.count)
+            model.hoveredRow = nil
+            model.selectedID = prompts[next].id
+            return true
+        case 36, 76: // Return pastes the selected prompt on key-up only.
             guard !model.isWorking else { return true }
-            if event.type == .keyDown {
+            if isDown {
                 navigation.returnDown(isRepeat: event.isARepeat)
-            } else if model.showingCategoryOverflow {
-                let count = max(0, model.categories.count - 13)
-                guard navigation.returnUp(count: count) != nil else { return true }
-                let extras = Array(model.categories.dropFirst(13))
-                if extras.indices.contains(model.overflowSelectedIndex) {
-                    activate(extras[model.overflowSelectedIndex])
-                }
-            } else if model.submenuPresented {
-                guard navigation.returnUp(count: model.activePrompts.count) != nil else { return true }
-                if let prompt = model.activePrompts.first(where: { $0.id == model.selectedID }) {
-                    onSelect?(prompt)
-                }
-            } else if navigation.returnUp(count: 1) != nil, let category = model.activeCategory {
-                activate(category)
+            } else if navigation.returnUp(count: model.visiblePrompts.count) != nil,
+                      let prompt = model.visiblePrompts.first(where: { $0.id == model.selectedID }) {
+                onSelect?(prompt)
             }
             return true
         default:
+            // 1–9 jump straight to a section until the user starts a search.
+            if isDown, !model.isWorking, !model.isSearching,
+               event.modifierFlags.intersection(.deviceIndependentFlagsMask).isEmpty,
+               let digit = event.charactersIgnoringModifiers.flatMap(Int.init), (1...9).contains(digit),
+               model.categories.indices.contains(digit - 1) {
+                open(model.categories[digit - 1])
+                return true
+            }
             return false
         }
     }
 }
 
-private struct PromptWheelView: View {
+
+struct PickerView: View {
     @ObservedObject var model: MenuModel
-    let selectCategory: (PromptCategory) -> Void
+    let openCategory: (PromptCategory) -> Void
     let hoverCategory: (PromptCategory, Bool) -> Void
-    let hoverPanel: (Bool) -> Void
-    let moveWheel: (CGSize) -> Void
-    let endWheelDrag: () -> Void
-    let recordInputEvent: (String, String) -> Void
     let selectPrompt: (Prompt) -> Void
     let manage: () -> Void
-    let showMoreCategories: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let permissions: () -> Void
+    let moved: () -> Void
+    let searchFieldReady: (NSTextField) -> Void
+
+    private var hue: Manual.Hue { Manual.hue(at: model.activeIndex ?? 0) }
 
     var body: some View {
-        Group {
-            if model.submenuPresented {
-                if model.submenuVertical {
-                    VStack(spacing: 10) {
-                        wheel.frame(width: model.wheelSize, height: model.wheelSize)
-                            .frame(maxWidth: model.submenuWidth)
-                        submenu
-                    }
-                } else {
-                    HStack(alignment: .center, spacing: 12) {
-                        wheel.frame(width: model.wheelSize, height: model.wheelSize)
-                        submenu
-                    }
-                }
+        ZStack(alignment: .topLeading) {
+            board
+            rail
+        }
+        .frame(width: SectionIndex.panelSize.width, height: SectionIndex.panelSize.height, alignment: .topLeading)
+        .transaction { $0.animation = Manual.step }
+    }
+
+    // MARK: Rail
+
+    private var rail: some View {
+        let count = model.categories.count
+        let height = SectionIndex.tabHeight(categoryCount: count)
+        let tabs = VStack(alignment: .leading, spacing: SectionIndex.tabGap) {
+            ForEach(Array(model.categories.enumerated()), id: \.element.id) { index, category in
+                let active = category.name == model.activeCategoryName
+                SectionTab(name: category.name, count: category.prompts.count,
+                           number: index < 9 ? index + 1 : nil, hue: Manual.hue(at: index),
+                           width: active ? SectionIndex.railWidth + SectionIndex.activeOverlap
+                                         : SectionIndex.railWidth - 4,
+                           height: height, isActive: active,
+                           hovered: model.hoveredTab == category.name,
+                           onHover: { hoverCategory(category, $0) }
+                ) { openCategory(category) }
+            }
+        }
+        .padding(.vertical, SectionIndex.railInset)
+        return Group {
+            if SectionIndex.railScrolls(categoryCount: count) {
+                ScrollView(.vertical, showsIndicators: false) { tabs }
             } else {
-                wheel.frame(width: model.wheelSize, height: model.wheelSize)
+                tabs
             }
         }
-        .padding(model.submenuPresented ? 12 : 0)
-        .frame(width: model.submenuPresented ? model.expandedPanelSize.width : model.wheelSize,
-               height: model.submenuPresented ? model.expandedPanelSize.height : model.wheelSize)
-        .background(Color.clear)
-        .onHover { inside in
-            recordInputEvent("swiftui.panelHover.\(inside ? "enter" : "exit")", "PromptWheelView")
-            hoverPanel(inside)
-        }
-    }
-
-    private var submenu: some View {
-        PromptSubmenuView(model: model, select: selectPrompt, manage: manage,
-                          selectCategory: selectCategory, recordInputEvent: recordInputEvent)
-            .frame(width: model.submenuWidth, height: model.submenuHeight)
-            .background(submenuMaterial, in: RoundedRectangle(cornerRadius: 15))
-            .overlay(RoundedRectangle(cornerRadius: 15).strokeBorder(.primary.opacity(0.12)))
-    }
-
-    private var submenuMaterial: AnyShapeStyle {
-        reduceTransparency
-            ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor))
-            : AnyShapeStyle(.ultraThinMaterial)
-    }
-
-    private var wheel: some View {
-        GeometryReader { geometry in
-            let size = min(geometry.size.width, geometry.size.height)
-            let slots = WheelCategoryLayout.slots(size: size, categoryCount: model.categories.count)
-            let innerCount = max(0, slots.count - min(7, slots.count))
-            let visibleCategoryCount = min(13, model.categories.count)
-
-            ZStack {
-                Circle().stroke(.primary.opacity(0.16), lineWidth: 1)
-                    .frame(width: size * 0.76, height: size * 0.76)
-                    .accessibilityHidden(true)
-                if innerCount > 0 {
-                    Circle().stroke(.primary.opacity(0.10), lineWidth: 1)
-                        .frame(width: size * 0.49, height: size * 0.49)
-                        .accessibilityHidden(true)
-                }
-                Circle()
-                    .fill(reduceTransparency
-                        ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor))
-                        : AnyShapeStyle(.ultraThinMaterial))
-                    .overlay(Circle().strokeBorder(.primary.opacity(0.12)))
-                    .frame(width: size * (innerCount > 0 ? 0.27 : 0.33),
-                           height: size * (innerCount > 0 ? 0.27 : 0.33))
-                    .shadow(color: .black.opacity(0.12), radius: 10, y: 3)
-                    .overlay {
-                        Image(systemName: "text.bubble.fill")
-                            .font(.system(size: size * 0.09))
-                            .foregroundStyle(.tint)
-                            .accessibilityHidden(true)
-                    }
-                    .contentShape(Circle())
-                    .gesture(DragGesture(minimumDistance: 5)
-                        .onChanged {
-                            recordInputEvent("swiftui.centerDrag.changed", "WheelCenter")
-                            moveWheel($0.translation)
-                        }
-                        .onEnded { _ in
-                            recordInputEvent("swiftui.centerDrag.ended", "WheelCenter")
-                            endWheelDrag()
-                        })
-
-                ForEach(slots, id: \.index) { slot in
-                    let index = slot.index
-                    let isMore = slot.isMore
-                    if isMore {
-                        let hovered = model.hoveredCategoryName == "__more__"
-                        Button(action: showMoreCategories) {
-                            Text("More +\(model.categories.count - visibleCategoryCount)")
-                                .font(.system(size: max(8, min(12, size * 0.043)), weight: .medium))
-                                .lineLimit(1)
-                                .frame(width: slot.labelWidth, height: slot.buttonHeight)
-                                .background(categoryFill(active: false), in: Capsule())
-                                .overlay(Capsule().strokeBorder(.primary.opacity(0.12)))
-                                .scaleEffect(hovered ? 1.08 : 1)
-                        }
-                        .buttonStyle(.plain)
-                        .position(slot.center)
-                        .onHover { inside in
-                            recordInputEvent("swiftui.categoryHover.\(inside ? "enter" : "exit")", "MoreCategoryButton")
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
-                                model.hoveredCategoryName = inside ? "__more__" : nil
-                            }
-                        }
-                        .help("顯示其他分類")
-                        .accessibilityLabel("More categories")
-                    } else {
-                        let category = model.categories[index]
-                        let active = category.name == model.activeCategoryName
-                        let hovered = model.hoveredCategoryName == category.name
-                        Button { selectCategory(category) } label: {
-                            Text(shortLabel(for: category))
-                                .font(.system(size: max(8, min(12, size * 0.043)),
-                                              weight: active || hovered ? .semibold : .medium))
-                                .lineLimit(1)
-                                .frame(width: slot.labelWidth, height: slot.buttonHeight)
-                                .background(categoryFill(active: active), in: Capsule())
-                                .overlay(Capsule().strokeBorder(.primary.opacity(active ? 0.22 : 0.12)))
-                                .scaleEffect(hovered ? 1.08 : 1)
-                                .shadow(color: .black.opacity(hovered ? 0.10 : 0), radius: 5, y: 2)
-                                .contentShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        .position(slot.center)
-                        .onHover { inside in
-                            recordInputEvent("swiftui.categoryHover.\(inside ? "enter" : "exit")", "CategoryButton")
-                            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
-                                model.hoveredCategoryName = inside ? category.name : nil
-                            }
-                            hoverCategory(category, inside)
-                        }
-                        .help(category.name)
-                        .accessibilityLabel("\(category.name) category, hover or click to open prompts")
-                        .accessibilityAddTraits(active ? .isSelected : [])
-                    }
-                }
-            }
-            .frame(width: size, height: size)
-        }
+        .frame(width: SectionIndex.railWidth + SectionIndex.activeOverlap, alignment: .leading)
+        .frame(maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .contain)
+        .accessibilityLabel("分類")
     }
 
-    private func categoryFill(active: Bool) -> AnyShapeStyle {
-        if active { return AnyShapeStyle(Color.accentColor.opacity(reduceTransparency ? 0.36 : 0.25)) }
-        return reduceTransparency
-            ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor))
-            : AnyShapeStyle(.ultraThinMaterial)
+    // MARK: Board and leaf
+
+    private var board: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(model.categories.isEmpty ? Manual.inkSoft : hue.board)
+            .shadow(color: .black.opacity(0.24), radius: 10, x: 0, y: 6)
+            .shadow(color: .black.opacity(0.18), radius: 1.5, x: 0, y: 1)
+            // The board's coloured margin is the handle: drag it anywhere to move the panel.
+            .overlay { WindowDragArea(moved: moved).clipShape(RoundedRectangle(cornerRadius: 6)) }
+            .overlay(alignment: .topLeading) { leaf.padding(14) }
+            .padding(.leading, SectionIndex.railWidth)
+            .padding([.top, .trailing, .bottom], SectionIndex.boardInset)
     }
 
-    private func shortLabel(for category: PromptCategory) -> String {
-        switch category.name {
-        case "GitHub": return "GitHub"
-        case "Implementation": return "Build"
-        case "Review": return "Review"
-        case "Debug": return "Debug"
-        case "General": return "General"
-        default:
-            let name = category.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            if name.count <= 8 { return name }
-            return String(name.prefix(7)) + "…"
+    private var leaf: some View {
+        ZStack(alignment: .leading) {
+            AcetateLeaf()
+            PunchHoles(color: model.categories.isEmpty ? Manual.inkSoft : hue.board)
+                .padding(.leading, 10)
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                Rectangle().fill(Manual.ink.opacity(0.85)).frame(height: 1.5).padding(.top, 8)
+                content
+                footer
+            }
+            .padding(.leading, 32).padding(.trailing, 18).padding(.vertical, 16)
+        }
+        .foregroundStyle(Manual.ink)
+    }
+
+    /// One compact row: search, where the paste goes, and the library. The open
+    /// section is named by its tab, so the leaf carries no title.
+    private var header: some View {
+        HStack(spacing: 10) {
+            SearchField(text: $model.query, onReady: searchFieldReady)
+                .frame(maxWidth: .infinity)
+                .frame(height: 26)
+            Text(subline).font(Manual.machine(10.5)).foregroundStyle(Manual.inkSoft)
+                .lineLimit(1).fixedSize()
+            Button(action: manage) {
+                Text("管理 library").font(Manual.head(15, weight: .semibold))
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Manual.ink.opacity(0.5)))
+            }
+            .buttonStyle(.plain)
+            .help("新增、編輯、刪除、匯入或匯出 prompts")
+        }
+        .background(WindowDragArea(moved: moved))
+    }
+
+    private var subline: String {
+        let target = model.hasTarget ? "→ \(model.targetName)" : "沒有可貼上的 App"
+        let count = model.isSearching ? "\(model.visiblePrompts.count) 筆 · " : ""
+        return "\(count)\(target) · 不送出"
+    }
+
+    @ViewBuilder private var content: some View {
+        if model.categories.isEmpty {
+            emptyState(title: "Library 是空的", detail: "在 Prompts 資料夾新增分類資料夾和 .md 檔，或從管理視窗新增。")
+        } else if model.isSearching && model.visiblePrompts.isEmpty {
+            emptyState(title: "找不到「\(model.query.trimmingCharacters(in: .whitespaces))」",
+                       detail: "換個關鍵字，或按 esc 清除搜尋回到分類。", showsManage: false)
+        } else if model.visiblePrompts.isEmpty {
+            emptyState(title: "這個分類還沒有 prompt", detail: "從管理視窗新增一個，或把 .md 檔放進這個資料夾。")
+        } else {
+            let prompts = model.visiblePrompts
+            let half = (prompts.count + 1) / 2
+            ScrollViewReader { proxy in
+                ScrollView(.vertical) {
+                    // Column-major so ↑ ↓ read down the first column, then the second.
+                    HStack(alignment: .top, spacing: 10) {
+                        column(Array(prompts.prefix(half)))
+                        column(Array(prompts.dropFirst(half)))
+                    }
+                    .padding(.vertical, 6)
+                }
+                .scrollIndicators(.automatic)
+                .onChange(of: model.selectedID) { _, id in
+                    guard let id else { return }
+                    proxy.scrollTo(id)
+                }
+            }
+            preview
+        }
+    }
+
+    private func column(_ prompts: [Prompt]) -> some View {
+        LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(prompts) { prompt in
+                let rowHue = Manual.hue(at: model.hueIndex(for: prompt))
+                PromptTitleRow(prompt: prompt, fullText: model.previewText(prompt),
+                    hue: model.isSearching ? rowHue : hue,
+                    showsCategory: model.isSearching,
+                    isSelected: prompt.id == model.selectedID,
+                    isPasting: prompt.id == model.pastingID,
+                    isDisabled: model.isWorking,
+                    hovered: model.hoveredRow == prompt.id,
+                    onHover: { inside in
+                        if inside { model.hoveredRow = prompt.id }
+                        else if model.hoveredRow == prompt.id { model.hoveredRow = nil }
+                    }) { selectPrompt(prompt) }
+                .id(prompt.id)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    /// Fixed-height strip, so reading a prompt never moves the list under the pointer.
+    private var preview: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            if let prompt = model.previewPrompt {
+                HStack(spacing: 6) {
+                    Text(prompt.name).font(Manual.head(14, weight: .bold)).lineLimit(1)
+                    if model.isSearching {
+                        Text(prompt.category).font(Manual.machine(9.5)).foregroundStyle(Manual.inkSoft)
+                    }
+                    Spacer(minLength: 4)
+                    Text(model.hoveredRow == prompt.id ? "點一下貼上" : "↩ 貼上")
+                        .font(Manual.machine(10, weight: .semibold)).foregroundStyle(Manual.inkSoft)
+                }
+                Text(model.excerpt(prompt))
+                    .font(Manual.body(12.5)).foregroundStyle(Manual.inkSoft)
+                    .lineSpacing(1.5).lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .frame(height: 46, alignment: .topLeading)
+        .padding(.horizontal, 10).padding(.vertical, 7)
+        .background(hue.board.opacity(0.10), in: RoundedRectangle(cornerRadius: 3))
+        .overlay(alignment: .top) { Rectangle().fill(Manual.paperRule).frame(height: 1) }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("預覽")
+    }
+
+    private func emptyState(title: String, detail: String, showsManage: Bool = true) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(Manual.head(21)).lineLimit(2)
+            Text(detail).font(Manual.body(13)).foregroundStyle(Manual.inkSoft)
+            if showsManage {
+                Button("開啟管理視窗", action: manage)
+                    .buttonStyle(.plain)
+                    .font(Manual.head(16, weight: .bold))
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Manual.ink, in: RoundedRectangle(cornerRadius: 3))
+                    .foregroundStyle(Manual.acetate)
+                    .padding(.top, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.top, 18)
+    }
+
+    @ViewBuilder private var footer: some View {
+        if model.needsPermission {
+            ErrataSlip(text: "需要輔助使用權限才能貼上。", actionTitle: "開啟設定", action: permissions)
+                .padding(.top, 8)
+        } else if !model.hasTarget {
+            ErrataSlip(text: "先點選其他 App 的輸入框，再按 ⌥ Space。").padding(.top, 8)
+        } else if let message = model.message {
+            ErrataSlip(text: message).padding(.top, 8)
         }
     }
 }
 
-private struct PromptSubmenuView: View {
-    @ObservedObject var model: MenuModel
-    let select: (Prompt) -> Void
-    let manage: () -> Void
-    let selectCategory: (PromptCategory) -> Void
-    let recordInputEvent: (String, String) -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var selectedPrompt: Prompt? {
-        model.activePrompts.first { $0.id == model.selectedID }
-    }
+/// One line per prompt: the title, a punched hole when selected, and in search
+/// results a chip of the section hue it came from.
+private struct PromptTitleRow: View {
+    let prompt: Prompt
+    let fullText: String?
+    let hue: Manual.Hue
+    let showsCategory: Bool
+    let isSelected: Bool
+    let isPasting: Bool
+    let isDisabled: Bool
+    let hovered: Bool
+    let onHover: (Bool) -> Void
+    let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(model.showingCategoryOverflow ? "其他分類" : (model.activeCategoryName ?? "Prompts"))
-                        .font(.title3.weight(.semibold))
-                    if !model.showingCategoryOverflow {
-                        Text("貼到 \(model.targetName)")
-                            .font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                    }
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Group {
+                    if isSelected { PunchedHole(color: hue.board, diameter: 9) }
+                    else if showsCategory { RoundedRectangle(cornerRadius: 1.5).fill(hue.board).frame(width: 4, height: 13) }
+                    else { Color.clear }
                 }
-                Spacer()
-                Text("不自動送出").font(.caption2).foregroundStyle(.secondary)
-            }
-            Divider()
-            if model.showingCategoryOverflow {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 4) {
-                            ForEach(Array(model.categories.dropFirst(13).enumerated()), id: \.element.id) { offset, category in
-                                let categoryIndex = offset
-                                Button {
-                                    selectCategory(category)
-                                } label: {
-                                    HStack {
-                                        Text(category.name).font(.system(size: 13, weight: .medium))
-                                        Spacer()
-                                        Text("\(category.prompts.count) 個").font(.caption).foregroundStyle(.secondary)
-                                    }
-                                    .padding(.horizontal, 10).padding(.vertical, 8)
-                                    .contentShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                                .buttonStyle(.plain)
-                                .background(model.overflowSelectedIndex == categoryIndex ? Color.accentColor.opacity(0.16) : .clear,
-                                            in: RoundedRectangle(cornerRadius: 8))
-                                .id(category.id)
-                                .help(category.name)
-                                .accessibilityAddTraits(model.overflowSelectedIndex == categoryIndex ? .isSelected : [])
-                            }
-                        }
-                    }
-                    .onAppear { scrollToOverflowSelection(using: proxy) }
-                    .onChange(of: model.overflowSelectedIndex) { _, _ in
-                        scrollToOverflowSelection(using: proxy)
-                    }
-                }
-            } else {
-                HStack(alignment: .top, spacing: 10) {
-                    ScrollView {
-                        LazyVStack(spacing: 5) {
-                            ForEach(model.activePrompts) { prompt in
-                                Button {
-                                    recordInputEvent("swiftui.promptButton.action", "PromptRowButton")
-                                    select(prompt)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        HStack {
-                                            Text(prompt.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                                            Spacer(minLength: 4)
-                                            if model.selectedID == prompt.id {
-                                                Image(systemName: "return").font(.caption2)
-                                            }
-                                        }
-                                        Text(summary(for: prompt)).font(.caption).foregroundStyle(.secondary)
-                                            .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                    .padding(.horizontal, 9).padding(.vertical, 7)
-                                    .contentShape(RoundedRectangle(cornerRadius: 8))
-                                }
-                                .buttonStyle(.plain)
-                                .background(model.selectedID == prompt.id
-                                    ? Color.accentColor.opacity(0.15) : .clear,
-                                    in: RoundedRectangle(cornerRadius: 8))
-                                .disabled(model.isWorking)
-                                .onHover { inside in
-                                    recordInputEvent("swiftui.promptHover.\(inside ? "enter" : "exit")", "PromptRowButton")
-                                    if inside {
-                                        model.hoveredPrompt = prompt
-                                        model.selectedID = prompt.id
-                                        model.previewText = preview(prompt)
-                                    }
-                                }
-                                .accessibilityHint("Hover, use arrow keys, or choose Preview full prompt. Activation pastes without sending.")
-                                .accessibilityAction(named: Text("Preview full prompt")) {
-                                    previewForAccessibility(prompt)
-                                }
-                                .accessibilityValue(accessibilityPreviewValue(for: prompt))
-                            }
-                        }
-                    }
-                    .frame(width: min(190, max(72, model.submenuWidth * 0.44)))
-                    if let prompt = model.hoveredPrompt ?? selectedPrompt,
-                       let text = model.hoveredPrompt == nil ? preview(prompt) : model.previewText {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(prompt.name).font(.caption.weight(.semibold)).lineLimit(2)
-                            ScrollView {
-                                Text(text)
-                                    .font(.system(.caption, design: .monospaced))
-                                    .textSelection(.enabled)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                        .padding(9)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
-                        .accessibilityLabel("Prompt full text preview")
-                    } else {
-                        ContentUnavailableView("將游標停在項目上",
-                            systemImage: "text.quote",
-                            description: Text("預覽全文；點擊項目即可貼上。"))
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
+                .frame(width: 9, height: 13)
+                Text(prompt.name).font(Manual.head(16.5, weight: isSelected ? .bold : .semibold))
+                    .lineLimit(1).truncationMode(.tail)
+                Spacer(minLength: 2)
+                if isPasting {
+                    Text("貼上中…").font(Manual.machine(9.5, weight: .semibold))
                 }
             }
-            Divider()
-            HStack {
-                if let message = model.message {
-                    Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                } else if model.showingCategoryOverflow {
-                    Text("← 圓環　↑ ↓ 分類　→ 開啟　esc 取消").font(.caption2).foregroundStyle(.secondary)
-                } else {
-                    Text("↑ ↓ 選擇項目　↵ 貼上　esc 取消").font(.caption2).foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("管理 library…", action: manage).font(.caption)
-            }
+            .padding(.horizontal, 7)
+            .frame(height: 30)
+            .background(rowFill, in: RoundedRectangle(cornerRadius: 3))
+            .overlay(alignment: .bottom) { Rectangle().fill(Manual.paperRule).frame(height: 0.5) }
+            .contentShape(Rectangle())
         }
-        .padding(12)
+        .buttonStyle(.plain)
+        .disabled(isDisabled)
+        .onHover(perform: onHover)
+        .help(fullText ?? prompt.name)
+        .accessibilityLabel(showsCategory ? "\(prompt.name)，\(prompt.category)" : prompt.name)
+        .accessibilityValue(fullText ?? "")
+        .accessibilityHint("貼到原本的 App，不會送出。")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 
-    private func scrollToOverflowSelection(using proxy: ScrollViewProxy) {
-        let index = model.overflowSelectedIndex + 13
-        guard model.categories.indices.contains(index) else { return }
-        let categoryID = model.categories[index].id
-        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.12)) {
-            proxy.scrollTo(categoryID, anchor: .center)
+    private var rowFill: Color {
+        if isPasting { return hue.board.opacity(0.28) }
+        if isSelected { return hue.board.opacity(0.18) }
+        return hovered ? Manual.ink.opacity(0.06) : .clear
+    }
+}
+
+/// AppKit search field so input methods (注音、拼音) compose normally inside the
+/// non-activating panel.
+struct SearchField: NSViewRepresentable {
+    @Binding var text: String
+    let onReady: (NSTextField) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.isBordered = false
+        field.drawsBackground = true
+        field.backgroundColor = NSColor(white: 1, alpha: 0.9)
+        field.textColor = NSColor(red: 0.082, green: 0.082, blue: 0.082, alpha: 1)
+        field.font = .systemFont(ofSize: 12.5)
+        field.focusRingType = .none
+        field.cell?.usesSingleLineMode = true
+        field.cell?.isScrollable = true
+        field.placeholderAttributedString = NSAttributedString(string: "打字搜尋全部 prompt", attributes: [
+            .foregroundColor: NSColor(red: 0.29, green: 0.275, blue: 0.247, alpha: 1),
+            .font: NSFont.systemFont(ofSize: 12.5)
+        ])
+        field.wantsLayer = true
+        field.layer?.cornerRadius = 3
+        field.layer?.borderWidth = 1
+        field.layer?.borderColor = NSColor(white: 0, alpha: 0.35).cgColor
+        field.delegate = context.coordinator
+        field.setAccessibilityLabel("搜尋 prompt")
+        DispatchQueue.main.async { onReady(field) }
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        if let editor = field.currentEditor() as? NSTextView, editor.hasMarkedText() { return }
+        if field.stringValue != text { field.stringValue = text }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        let text: Binding<String>
+        init(text: Binding<String>) { self.text = text }
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            text.wrappedValue = field.stringValue
         }
     }
+}
 
-    private func previewForAccessibility(_ prompt: Prompt) {
-        model.selectedID = prompt.id
-        model.hoveredPrompt = prompt
-        model.previewText = preview(prompt)
+/// A patch of the panel that moves the whole window when dragged, using AppKit's
+/// own window drag so it tracks the pointer exactly, even across displays.
+struct WindowDragArea: NSViewRepresentable {
+    let moved: () -> Void
+
+    func makeNSView(context: Context) -> DragView {
+        let view = DragView()
+        view.moved = moved
+        return view
     }
 
-    private func accessibilityPreviewValue(for prompt: Prompt) -> String {
-        if model.selectedID == prompt.id {
-            return model.previewText ?? preview(prompt) ?? "無法讀取此 Prompt"
+    func updateNSView(_ view: DragView, context: Context) { view.moved = moved }
+
+    final class DragView: NSView {
+        var moved: (() -> Void)?
+        override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+        override var mouseDownCanMoveWindow: Bool { true }
+        override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+        override func mouseDown(with event: NSEvent) {
+            guard let window else { return }
+            let before = window.frame.origin
+            NSCursor.closedHand.push()
+            window.performDrag(with: event)
+            NSCursor.pop()
+            if window.frame.origin != before { moved?() }
         }
-        return summary(for: prompt)
-    }
-
-    private func summary(for prompt: Prompt) -> String {
-        guard let body = preview(prompt) else { return "無法讀取此 Prompt" }
-        return body.split(whereSeparator: \.isNewline).first.map(String.init) ?? "（空白內容）"
-    }
-
-    private func preview(_ prompt: Prompt) -> String? {
-        try? PromptLibrary.read(prompt)
     }
 }

@@ -12,26 +12,28 @@ final class PromptLibraryWindow {
         save: @escaping (PromptDraft, Prompt?) -> String?,
         delete: @escaping (Prompt) -> Void,
         importPrompts: @escaping () -> Void,
-        exportPrompts: @escaping () -> Void,
-        preview: @escaping (Prompt) -> String?
+        exportPrompts: @escaping () -> Void
     ) {
         window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 820, height: 560),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 880, height: 580),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         window.title = "Prompt Library"
-        window.minSize = NSSize(width: 700, height: 440)
+        window.titlebarAppearsTransparent = true
+        window.minSize = NSSize(width: 760, height: 460)
         window.isReleasedWhenClosed = false
-        window.contentView = NSHostingView(rootView: PromptLibraryManagerView(
+        window.backgroundColor = NSColor(Manual.cover)
+        // A printed manual: fixed palette in both system appearances, sheets included.
+        window.appearance = NSAppearance(named: .aqua)
+        window.contentView = FirstClickHostingView(rootView: PromptLibraryManagerView(
             model: model,
             copy: copy,
             save: save,
             delete: delete,
             importPrompts: importPrompts,
-            exportPrompts: exportPrompts,
-            preview: preview
+            exportPrompts: exportPrompts
         ))
     }
 
@@ -42,195 +44,226 @@ final class PromptLibraryWindow {
     }
 }
 
-private struct PromptLibraryManagerView: View {
+extension Manual {
+    /// The manual's cover board behind the tabs in the library window.
+    static let cover = Color(red: 0.902, green: 0.886, blue: 0.851)   // #E6E2D9
+}
+
+struct PromptLibraryManagerView: View {
     @ObservedObject var model: MenuModel
     let copy: (Prompt) -> Void
     let save: (PromptDraft, Prompt?) -> String?
     let delete: (Prompt) -> Void
     let importPrompts: () -> Void
     let exportPrompts: () -> Void
-    let preview: (Prompt) -> String?
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    private var selectedPrompt: Prompt? {
-        model.activePrompts.first { $0.id == model.selectedID }
-    }
-    private var panelBackground: AnyShapeStyle {
-        reduceTransparency
-            ? AnyShapeStyle(Color(nsColor: .windowBackgroundColor))
-            : AnyShapeStyle(.ultraThinMaterial)
-    }
+
+    private var hue: Manual.Hue { Manual.hue(at: model.activeIndex ?? 0) }
+    private var selectedPrompt: Prompt? { model.activePrompts.first { $0.id == model.selectedID } }
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("分類").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                    .padding(.horizontal, 10).padding(.top, 10)
-                ScrollView {
-                    LazyVStack(spacing: 3) {
-                        ForEach(model.categories.indices, id: \.self) { index in
-                            let category = model.categories[index]
-                            Button {
-                                model.activeCategoryName = category.name
-                                model.selectedID = category.prompts.first?.id
-                                model.hoveredPrompt = nil
-                                model.previewText = nil
-                            } label: {
-                                HStack {
-                                    Text(category.name).lineLimit(1)
-                                    Spacer(minLength: 6)
-                                    Text("\(category.prompts.count)")
-                                        .font(.caption2).foregroundStyle(.secondary)
-                                }
-                                .padding(.horizontal, 10).padding(.vertical, 7)
-                                .contentShape(RoundedRectangle(cornerRadius: 7))
-                            }
-                            .buttonStyle(.plain)
-                            .background(category.name == model.activeCategoryName
-                                ? Color.accentColor.opacity(0.16) : .clear,
-                                in: RoundedRectangle(cornerRadius: 7))
-                            .accessibilityAddTraits(category.name == model.activeCategoryName ? .isSelected : [])
-                        }
-                    }.padding(.horizontal, 6)
-                }
-                Divider()
-                Button(action: importPrompts) { Label("匯入 JSON…", systemImage: "square.and.arrow.down") }
-                Button(action: exportPrompts) { Label("匯出 JSON…", systemImage: "square.and.arrow.up") }
-            }
-            .frame(width: 205)
-            .padding(.bottom, 10)
-            .background(.quaternary.opacity(0.35))
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(model.activeCategoryName ?? "Prompt Library")
-                            .font(.title2.weight(.semibold))
-                        Text("\(model.activePrompts.count) 個 prompts")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Button { beginCreate() } label: { Label("新增 Prompt", systemImage: "plus") }
-                        .keyboardShortcut("n", modifiers: [.command])
-                }
-                .padding(.top, 14)
-
-                if model.activePrompts.isEmpty {
-                    ContentUnavailableView("此分類尚無 prompts", systemImage: "text.quote",
-                        description: Text("新增一筆，或匯入 JSON library。"))
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else {
-                    HStack(alignment: .top, spacing: 12) {
-                        ScrollView {
-                            LazyVStack(spacing: 6) {
-                                ForEach(model.activePrompts) { prompt in promptRow(prompt) }
-                            }
-                        }
-                        .frame(width: 310)
-
-                        Group {
-                            if let prompt = model.hoveredPrompt ?? selectedPrompt,
-                               let text = model.hoveredPrompt == nil ? preview(prompt) : model.previewText {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text(prompt.name).font(.headline)
-                                    ScrollView {
-                                        Text(text).font(.system(.body, design: .monospaced))
-                                            .textSelection(.enabled)
-                                            .frame(maxWidth: .infinity, alignment: .leading)
-                                    }
-                                }
-                                .padding(12)
-                                .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
-                            } else {
-                                ContentUnavailableView("選取 prompt",
-                                    systemImage: "text.quote",
-                                    description: Text("預覽內容或使用右側操作。"))
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                    .frame(maxHeight: .infinity)
-                }
-
-                if let message = model.message {
-                    Text(message).font(.caption).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack {
-                    if model.needsPermission {
-                        Button("啟用輔助使用權限…") {
-                            PasteController.openAccessibilitySettings()
-                        }
-                        .font(.caption)
-                    }
-                    Spacer()
-                    Text("提示詞只會貼上，不會自動送出。").font(.caption2).foregroundStyle(.secondary)
-                }
-                .padding(.bottom, 12)
-            }
-            .padding(.horizontal, 16)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        HStack(alignment: .top, spacing: 0) {
+            rail
+            board
         }
-        .background(panelBackground)
+        .padding(.top, 34)
+        .padding([.bottom, .trailing], 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Manual.cover)
+        .foregroundStyle(Manual.ink)
+        .transaction { $0.animation = Manual.step }
         .sheet(isPresented: $model.editorPresented) {
-            PromptEditorSheet(draft: $model.editorDraft, message: $model.editorMessage) { save($0) }
+            PromptEditorSheet(draft: $model.editorDraft, message: $model.editorMessage,
+                              isNew: model.editingPrompt == nil,
+                              categories: model.categories.map(\.name)) { save($0) }
         }
-        .confirmationDialog("刪除這個 prompt？", isPresented: Binding(
+        .confirmationDialog("刪除「\(model.deleteCandidate?.name ?? "")」？", isPresented: Binding(
             get: { model.deleteCandidate != nil }, set: { if !$0 { model.deleteCandidate = nil } }),
             titleVisibility: .visible) {
-            Button("刪除", role: .destructive) {
+            Button("刪除 Markdown 檔", role: .destructive) {
                 if let prompt = model.deleteCandidate { delete(prompt) }
                 model.deleteCandidate = nil
             }
             Button("取消", role: .cancel) { model.deleteCandidate = nil }
         } message: {
-            Text(model.deleteCandidate?.name ?? "")
+            Text("檔案會從 library 資料夾移除，這個動作無法復原。")
         }
     }
 
-    private func promptRow(_ prompt: Prompt) -> some View {
-        HStack(spacing: 8) {
-            Button {
-                model.selectedID = prompt.id
-                model.hoveredPrompt = nil
-                model.previewText = nil
-            } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(prompt.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-                    Text(summary(for: prompt)).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+    // MARK: Rail
+
+    private var rail: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 5) {
+                    ForEach(Array(model.categories.enumerated()), id: \.element.id) { index, category in
+                        let active = category.name == model.activeCategoryName
+                        SectionTab(name: category.name, count: category.prompts.count, number: nil,
+                                   hue: Manual.hue(at: index),
+                                   width: active ? 190 + SectionIndex.activeOverlap
+                                                 : 186,
+                                   height: 40, isActive: active,
+                                   hovered: model.hoveredTab == category.name,
+                                   onHover: { model.hoveredTab = $0 ? category.name : (model.hoveredTab == category.name ? nil : model.hoveredTab) }
+                        ) { model.open(category) }
+                    }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10).padding(.vertical, 8)
+                .padding(.vertical, 18)
+            }
+            Spacer(minLength: 12)
+            VStack(alignment: .leading, spacing: 6) {
+                railButton("匯入 JSON…", systemImage: "square.and.arrow.down", action: importPrompts)
+                railButton("匯出 JSON…", systemImage: "square.and.arrow.up", action: exportPrompts)
+            }
+            .padding(.leading, 18).padding(.bottom, 4)
+        }
+        .frame(width: 200)
+        .padding(.leading, 0)
+        .zIndex(1)
+    }
+
+    private func railButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(Manual.head(16, weight: .semibold))
+                .frame(width: 150, alignment: .leading)
+                .padding(.horizontal, 10).padding(.vertical, 6)
+                .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Manual.ink.opacity(0.35)))
                 .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Board
+
+    private var board: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(model.categories.isEmpty ? Manual.inkSoft : hue.board)
+            .shadow(color: .black.opacity(0.14), radius: 10, x: 0, y: 4)
+            .overlay { leaf.padding(16) }
+            .padding(.leading, -SectionIndex.activeOverlap + 10)
+    }
+
+    private var leaf: some View {
+        ZStack(alignment: .leading) {
+            AcetateLeaf()
+            PunchHoles(color: model.categories.isEmpty ? Manual.inkSoft : hue.board).padding(.leading, 10)
+            VStack(alignment: .leading, spacing: 0) {
+                header
+                Rectangle().fill(Manual.ink.opacity(0.85)).frame(height: 1.5).padding(.vertical, 12)
+                if model.activePrompts.isEmpty {
+                    emptyState
+                } else {
+                    HStack(alignment: .top, spacing: 18) {
+                        list.frame(width: 270)
+                        Rectangle().fill(Manual.paperRule).frame(width: 1)
+                        detail
+                    }
+                }
+                if let message = model.message {
+                    statusLine(message).padding(.top, 12)
+                }
+            }
+            .padding(.leading, 36).padding(.trailing, 22).padding(.vertical, 20)
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(model.activeCategory?.name ?? "Prompt Library").font(Manual.head(34))
+                Text("\(model.activePrompts.count) \(model.activePrompts.count == 1 ? "PROMPT" : "PROMPTS") · MARKDOWN · 只貼上，不送出")
+                    .font(Manual.machine(10.5)).foregroundStyle(Manual.inkSoft)
+            }
+            Spacer()
+            Button { beginCreate() } label: {
+                Label("新增 Prompt", systemImage: "plus")
+                    .font(Manual.head(17, weight: .bold))
+                    .padding(.horizontal, 12).padding(.vertical, 6)
+                    .background(Manual.ink, in: RoundedRectangle(cornerRadius: 3))
+                    .foregroundStyle(Manual.acetate)
             }
             .buttonStyle(.plain)
-            .background(model.selectedID == prompt.id ? Color.accentColor.opacity(0.13) : .clear,
-                        in: RoundedRectangle(cornerRadius: 8))
-            .onHover { inside in
-                if inside {
-                    model.hoveredPrompt = prompt
-                    model.previewText = preview(prompt)
-                } else if model.hoveredPrompt?.id == prompt.id {
-                    model.hoveredPrompt = nil
-                    model.previewText = nil
-                }
-            }
-            Button { copy(prompt) } label: { Image(systemName: "doc.on.doc") }
-                .buttonStyle(.borderless).help("複製到剪貼簿；不會自動貼上或送出")
-            Button { beginEdit(prompt) } label: { Image(systemName: "pencil") }
-                .buttonStyle(.borderless).help("編輯 Prompt")
-            Button(role: .destructive) { model.deleteCandidate = prompt } label: {
-                Image(systemName: "trash")
-            }
-            .buttonStyle(.borderless).help("刪除 Prompt")
+            .keyboardShortcut("n", modifiers: [.command])
+            .help("新增 Prompt（⌘N）")
         }
-        .accessibilityElement(children: .contain)
     }
 
-    private func summary(for prompt: Prompt) -> String {
-        guard let body = preview(prompt) else { return "無法讀取此 Prompt" }
-        return body.split(whereSeparator: \.isNewline).first.map(String.init) ?? "（空白內容）"
+    private var list: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(model.activePrompts) { prompt in
+                    LibraryRow(prompt: prompt, excerpt: model.excerpt(prompt), hue: hue,
+                               isSelected: prompt.id == model.selectedID,
+                               hovered: model.hoveredRow == prompt.id,
+                               onHover: { inside in
+                                   if inside { model.hoveredRow = prompt.id }
+                                   else if model.hoveredRow == prompt.id { model.hoveredRow = nil }
+                               }) { model.selectedID = prompt.id }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var detail: some View {
+        if let prompt = selectedPrompt {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(prompt.name).font(Manual.head(25)).lineLimit(2)
+                Text(prompt.url.lastPathComponent).font(Manual.machine(10)).foregroundStyle(Manual.inkSoft)
+                    .lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 8) {
+                    actionButton("拷貝", "doc.on.doc", help: "拷貝到剪貼簿；不會貼上或送出") { copy(prompt) }
+                    actionButton("編輯", "pencil", help: "編輯標題、分類與內容") { beginEdit(prompt) }
+                    actionButton("刪除", "trash", help: "刪除這個 Markdown 檔") { model.deleteCandidate = prompt }
+                    Spacer(minLength: 0)
+                }
+                Rectangle().fill(Manual.paperRule).frame(height: 1)
+                ScrollView {
+                    Text(model.previewText(prompt) ?? "無法讀取這個 Markdown 檔案。")
+                        .font(Manual.body(14))
+                        .lineSpacing(5)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: 560, alignment: .leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        } else {
+            Text("選一個 prompt 檢視全文。")
+                .font(Manual.body(14)).foregroundStyle(Manual.inkSoft)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func actionButton(_ title: String, _ systemImage: String, help: String,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: systemImage)
+                .font(Manual.head(15, weight: .semibold))
+                .fixedSize()
+                .padding(.horizontal, 8).padding(.vertical, 4)
+                .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Manual.ink.opacity(0.4)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(model.categories.isEmpty ? "Library 是空的" : "這個分類還沒有 prompt").font(Manual.head(23))
+            Text("按「新增 Prompt」建立一筆，或匯入 JSON library。每個 prompt 都是資料夾裡的一個 .md 檔。")
+                .font(Manual.body(14)).foregroundStyle(Manual.inkSoft)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    @ViewBuilder private func statusLine(_ message: String) -> some View {
+        if model.needsPermission {
+            ErrataSlip(text: message, actionTitle: "開啟設定") { PasteController.openAccessibilitySettings() }
+        } else {
+            Text(message).font(Manual.machine(11)).foregroundStyle(Manual.inkSoft)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func beginCreate() {
@@ -241,7 +274,7 @@ private struct PromptLibraryManagerView: View {
     }
 
     private func beginEdit(_ prompt: Prompt) {
-        guard let body = preview(prompt) else { model.message = "無法讀取 \(prompt.name)。"; return }
+        guard let body = try? PromptLibrary.read(prompt) else { model.message = "無法讀取 \(prompt.name)。"; return }
         model.editingPrompt = prompt
         model.editorMessage = nil
         model.editorDraft = PromptDraft(category: prompt.category, title: prompt.name, body: body)
@@ -258,40 +291,104 @@ private struct PromptLibraryManagerView: View {
     }
 }
 
+private struct LibraryRow: View {
+    let prompt: Prompt
+    let excerpt: String
+    let hue: Manual.Hue
+    let isSelected: Bool
+    let hovered: Bool
+    let onHover: (Bool) -> Void
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 10) {
+                Group {
+                    if isSelected { PunchedHole(color: hue.board, diameter: 10) } else { Color.clear }
+                }
+                .frame(width: 10, height: 10)
+                .padding(.top, 5)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(prompt.name).font(Manual.head(18, weight: .bold)).lineLimit(1)
+                    Text(excerpt).font(Manual.body(12.5)).foregroundStyle(Manual.inkSoft).lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(.horizontal, 8).padding(.vertical, 9)
+            .background(isSelected ? hue.board.opacity(0.16) : hovered ? Manual.ink.opacity(0.05) : .clear,
+                        in: RoundedRectangle(cornerRadius: 3))
+            .overlay(alignment: .bottom) { Rectangle().fill(Manual.paperRule).frame(height: 0.5) }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover(perform: onHover)
+        .accessibilityLabel(prompt.name)
+        .accessibilityValue(excerpt)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
 private struct PromptEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Binding var draft: PromptDraft
     @Binding var message: String?
+    let isNew: Bool
+    let categories: [String]
     let onSave: (PromptDraft) -> Void
 
-    init(draft: Binding<PromptDraft>, message: Binding<String?>,
-         onSave: @escaping (PromptDraft) -> Void) {
-        _draft = draft
-        _message = message
-        self.onSave = onSave
-    }
-
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(draft.title.isEmpty ? "新增 Prompt" : "編輯 Prompt").font(.title2.weight(.semibold))
-            HStack {
-                TextField("分類", text: $draft.category)
-                TextField("標題", text: $draft.title)
+        VStack(alignment: .leading, spacing: 14) {
+            Text(isNew ? "新增 Prompt" : "編輯 Prompt").font(Manual.head(27))
+            HStack(alignment: .top, spacing: 12) {
+                field("分類") {
+                    TextField("例如 Review", text: $draft.category)
+                        .textFieldStyle(.roundedBorder)
+                        .overlay(alignment: .trailing) {
+                            Menu {
+                                ForEach(categories, id: \.self) { name in
+                                    Button(name) { draft.category = name }
+                                }
+                            } label: { Image(systemName: "chevron.down") }
+                            .menuStyle(.borderlessButton).menuIndicator(.hidden)
+                            .fixedSize().padding(.trailing, 6)
+                        }
+                }
+                .frame(width: 200)
+                field("標題（檔名）") {
+                    TextField("例如 Code Review", text: $draft.title).textFieldStyle(.roundedBorder)
+                }
             }
-            TextEditor(text: $draft.body)
-                .font(.system(.body, design: .monospaced))
-                .overlay(RoundedRectangle(cornerRadius: 7).stroke(.quaternary))
-                .accessibilityLabel("Prompt body")
+            field("內容（原文貼上，不做轉換）") {
+                TextEditor(text: $draft.body)
+                    .font(Manual.body(14))
+                    .foregroundStyle(Manual.ink)
+                    .scrollContentBackground(.hidden)
+                    .padding(6)
+                    .background(Manual.acetate, in: RoundedRectangle(cornerRadius: 3))
+                    .overlay(RoundedRectangle(cornerRadius: 3).strokeBorder(Manual.ink.opacity(0.25)))
+                    .accessibilityLabel("Prompt 內容")
+            }
             if let message {
-                Text(message).font(.caption).foregroundStyle(.red)
+                ErrataSlip(text: message)
             }
             HStack {
                 Spacer()
                 Button("取消", role: .cancel) { dismiss() }
+                    .keyboardShortcut(.cancelAction)
                 Button("儲存") { onSave(draft) }
                     .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(16).frame(width: 490, height: 350)
+        .padding(20)
+        .frame(width: 560, height: 420)
+        .background(Manual.cover)
+        .foregroundStyle(Manual.ink)
+    }
+
+    private func field<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(label).font(Manual.machine(10, weight: .semibold)).foregroundStyle(Manual.inkSoft)
+            content()
+        }
     }
 }
